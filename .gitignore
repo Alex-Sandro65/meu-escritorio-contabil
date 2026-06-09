@@ -1,0 +1,39 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+.env.production
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
+env/
+
+# Node
+node_modules/
+frontend/dist/
+.npm/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Uploads / arquivos sensíveis
+backend/uploads/
+*.pdf
+*.ofx
+
+# Docker volumes
+postgres_data/
+redis_data/
+
+# Logs
+*.log
+celerybeat-schedule

@@ -1,0 +1,1129 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ContaMax — Sistema SaaS Contábil</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+    * { font-family: 'Inter', system-ui, sans-serif; box-sizing: border-box; }
+    .sidebar-link { display:flex; align-items:center; gap:10px; padding:10px 16px; font-size:14px; color:#bfdbfe; transition:background .15s; border-radius:6px; margin:2px 8px; cursor:pointer; text-decoration:none; }
+    .sidebar-link:hover, .sidebar-link.active { background:#1e40af; color:white; }
+    .score-bar { transition: width .6s ease; }
+    .fade-in { animation: fadeIn .3s ease; }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .card { background:white; border-radius:12px; box-shadow:0 1px 3px rgba(0,0,0,.1); }
+    .badge-green  { background:#dcfce7; color:#15803d; }
+    .badge-yellow { background:#fef9c3; color:#a16207; }
+    .badge-red    { background:#fee2e2; color:#b91c1c; }
+    .badge-blue   { background:#dbeafe; color:#1d4ed8; }
+    .status-badge { font-size:11px; padding:2px 8px; border-radius:999px; font-weight:600; }
+    ::-webkit-scrollbar { width:6px; height:6px; }
+    ::-webkit-scrollbar-track { background:#f1f5f9; }
+    ::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:3px; }
+  </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+
+<div class="flex min-h-screen">
+
+  <!-- SIDEBAR -->
+  <aside class="w-56 bg-blue-900 text-white flex flex-col min-h-screen fixed left-0 top-0 bottom-0 z-30">
+    <div class="px-4 py-5 border-b border-blue-800">
+      <div class="text-xl font-bold flex items-center gap-2">
+        <span>📊</span> ContaMax
+      </div>
+      <div class="text-xs text-blue-300 mt-0.5">SaaS Contábil · v1.0</div>
+    </div>
+    <nav class="flex-1 py-3 overflow-auto">
+      <a onclick="showPage('dashboard')"   class="sidebar-link active" id="nav-dashboard">   📊 Dashboard       </a>
+      <a onclick="showPage('balancete')"   class="sidebar-link" id="nav-balancete">           📋 Balancetes      </a>
+      <a onclick="showPage('conciliacao')" class="sidebar-link" id="nav-conciliacao">         🔍 Conciliações    </a>
+      <a onclick="showPage('auditoria')"   class="sidebar-link" id="nav-auditoria">           📝 Auditoria       </a>
+      <a onclick="showPage('sped')"        class="sidebar-link" id="nav-sped">                🗂️ SPED ECD/ECF    </a>
+      <a onclick="showPage('relatorios')"  class="sidebar-link" id="nav-relatorios">          📑 Relatórios      </a>
+      <a onclick="showPage('empresas')"    class="sidebar-link" id="nav-empresas">            🏢 Empresas        </a>
+      <div class="px-4 mt-4 mb-1 text-xs text-blue-400 uppercase tracking-wider">Configurações</div>
+      <a onclick="showPage('config')"      class="sidebar-link" id="nav-config">              ⚙️ Configurações   </a>
+      <a onclick="showPage('integracoes')" class="sidebar-link" id="nav-integracoes">         🔌 Integrações     </a>
+      <a onclick="showPage('deploy')"      class="sidebar-link" id="nav-deploy">              🚀 Deploy Online   </a>
+    </nav>
+    <div class="p-4 border-t border-blue-800 text-xs text-blue-300">
+      <div class="font-medium text-white">Escritório Silva & Ass.</div>
+      <div>ana.silva@silva.adv.br</div>
+      <div class="mt-2 flex items-center gap-1">
+        <span class="w-2 h-2 bg-green-400 rounded-full"></span> Online · MFA ativo
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="ml-56 flex-1 overflow-auto">
+
+    <!-- TOPBAR -->
+    <div class="bg-white border-b sticky top-0 z-20 px-6 py-3 flex items-center justify-between shadow-sm">
+      <div id="topbar-title" class="font-semibold text-gray-700 text-lg">Dashboard Executivo</div>
+      <div class="flex items-center gap-3">
+        <select class="text-sm border rounded-lg px-3 py-1.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <option>📅 Junho 2025</option>
+          <option>Maio 2025</option>
+          <option>Abril 2025</option>
+        </select>
+        <select class="text-sm border rounded-lg px-3 py-1.5 bg-gray-50 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+          <option>🏢 Todas as Empresas</option>
+          <option>Alpha Comércio Ltda</option>
+          <option>Beta Serviços S.A.</option>
+          <option>Gama Indústria Ltda</option>
+        </select>
+        <button class="bg-blue-600 text-white text-sm px-3 py-1.5 rounded-lg hover:bg-blue-700 transition-colors">
+          + Importar
+        </button>
+      </div>
+    </div>
+
+    <!-- PAGES -->
+    <div id="page-dashboard"   class="page p-6 fade-in"></div>
+    <div id="page-balancete"   class="page p-6 fade-in hidden"></div>
+    <div id="page-conciliacao" class="page p-6 fade-in hidden"></div>
+    <div id="page-auditoria"   class="page p-6 fade-in hidden"></div>
+    <div id="page-sped"        class="page p-6 fade-in hidden"></div>
+    <div id="page-relatorios"  class="page p-6 fade-in hidden"></div>
+    <div id="page-empresas"    class="page p-6 fade-in hidden"></div>
+    <div id="page-config"      class="page p-6 fade-in hidden"></div>
+    <div id="page-integracoes" class="page p-6 fade-in hidden"></div>
+    <div id="page-deploy"      class="page p-6 fade-in hidden"></div>
+
+  </main>
+</div>
+
+<script>
+// ─────────────────────────────────────────────
+// DADOS DEMO
+// ─────────────────────────────────────────────
+const DEMO = {
+  empresas: [
+    { id:1, nome:'Alpha Comércio Ltda',   cnpj:'12.345.678/0001-90', regime:'Lucro Presumido', score:97.2, status:'conciliado' },
+    { id:2, nome:'Beta Serviços S.A.',    cnpj:'23.456.789/0001-01', regime:'Lucro Real',       score:84.5, status:'divergente' },
+    { id:3, nome:'Gama Indústria Ltda',   cnpj:'34.567.890/0001-12', regime:'Simples Nacional', score:99.1, status:'conciliado' },
+    { id:4, nome:'Delta Holding S.A.',    cnpj:'45.678.901/0001-23', regime:'Lucro Real',       score:61.3, status:'pendente'   },
+    { id:5, nome:'Épsilon Tech Ltda',     cnpj:'56.789.012/0001-34', regime:'Lucro Presumido',  score:92.8, status:'conciliado' },
+  ],
+  balancete: [
+    { cod:'1',         desc:'ATIVO',                          nivel:1, ant:0,         deb:0,          cred:0,          sal:2850000,   status:'',          score:null  },
+    { cod:'1.1',       desc:'ATIVO CIRCULANTE',               nivel:2, ant:0,         deb:0,          cred:0,          sal:1320000,   status:'',          score:null  },
+    { cod:'1.1.01',    desc:'CAIXA E EQUIVALENTES',           nivel:3, ant:185000,    deb:432000,     cred:318000,     sal:299000,    status:'conciliado', score:98.5  },
+    { cod:'1.1.01.001',desc:'Caixa Geral',                    nivel:4, ant:5000,      deb:12000,      cred:8500,       sal:8500,      status:'conciliado', score:100   },
+    { cod:'1.1.01.002',desc:'Banco Itaú CC 12345-6',          nivel:4, ant:130000,    deb:380000,     cred:270000,     sal:240000,    status:'divergente', score:71.2  },
+    { cod:'1.1.01.003',desc:'Banco Bradesco CC 98765-4',      nivel:4, ant:50000,     deb:40000,      cred:39500,      sal:50500,     status:'conciliado', score:99.1  },
+    { cod:'1.1.02',    desc:'CLIENTES',                       nivel:3, ant:210000,    deb:580000,     cred:495000,     sal:295000,    status:'pendente',   score:82.3  },
+    { cod:'1.1.02.001',desc:'Clientes — Duplicatas a Receber',nivel:4, ant:195000,    deb:560000,     cred:475000,     sal:280000,    status:'pendente',   score:82.3  },
+    { cod:'1.1.02.002',desc:'Clientes — Cheques a Receber',   nivel:4, ant:15000,     deb:20000,      cred:20000,      sal:15000,     status:'conciliado', score:95.0  },
+    { cod:'1.1.03',    desc:'ESTOQUES',                       nivel:3, ant:320000,    deb:180000,     cred:140000,     sal:360000,    status:'conciliado', score:94.7  },
+    { cod:'1.1.04',    desc:'IMPOSTOS A RECUPERAR',           nivel:3, ant:88000,     deb:45000,      cred:32000,      sal:101000,    status:'pendente',   score:76.0  },
+    { cod:'1.1.04.001',desc:'PIS a Recuperar',                nivel:4, ant:12000,     deb:8500,       cred:7000,       sal:13500,     status:'pendente',   score:76.0  },
+    { cod:'1.1.04.002',desc:'COFINS a Recuperar',             nivel:4, ant:55000,     deb:28000,      cred:22000,      sal:61000,     status:'conciliado', score:91.2  },
+    { cod:'1.1.04.003',desc:'IRPJ Antecipação',               nivel:4, ant:21000,     deb:8500,       cred:3000,       sal:26500,     status:'pendente',   score:68.0  },
+    { cod:'1.2',       desc:'ATIVO NÃO CIRCULANTE',           nivel:2, ant:0,         deb:0,          cred:0,          sal:1530000,   status:'',          score:null  },
+    { cod:'1.2.01',    desc:'IMOBILIZADO',                    nivel:3, ant:1450000,   deb:120000,     cred:40000,      sal:1530000,   status:'conciliado', score:98.2  },
+    { cod:'2',         desc:'PASSIVO + PL',                   nivel:1, ant:0,         deb:0,          cred:0,          sal:2850000,   status:'',          score:null  },
+    { cod:'2.1',       desc:'PASSIVO CIRCULANTE',             nivel:2, ant:0,         deb:0,          cred:0,          sal:680000,    status:'',          score:null  },
+    { cod:'2.1.01',    desc:'FORNECEDORES',                   nivel:3, ant:145000,    deb:320000,     cred:295000,     sal:120000,    status:'conciliado', score:96.4  },
+    { cod:'2.1.02',    desc:'EMPRÉSTIMOS E FINANCIAMENTOS',   nivel:3, ant:280000,    deb:45000,      cred:38000,      sal:273000,    status:'divergente', score:74.1  },
+    { cod:'2.1.03',    desc:'OBRIGAÇÕES TRIBUTÁRIAS',         nivel:3, ant:95000,     deb:78000,      cred:92000,      sal:109000,    status:'pendente',   score:69.5  },
+    { cod:'2.1.03.001',desc:'IRPJ a Pagar',                   nivel:4, ant:32000,     deb:32000,      cred:38000,      sal:38000,     status:'conciliado', score:97.0  },
+    { cod:'2.1.03.002',desc:'CSLL a Pagar',                   nivel:4, ant:18000,     deb:18000,      cred:21500,      sal:21500,     status:'conciliado', score:97.0  },
+    { cod:'2.1.03.003',desc:'PIS/COFINS a Pagar',             nivel:4, ant:28000,     deb:28000,      cred:32500,      sal:32500,     status:'pendente',   score:65.3  },
+    { cod:'2.1.04',    desc:'OBRIGAÇÕES TRABALHISTAS',        nivel:3, ant:72000,     deb:68000,      cred:76000,      sal:80000,     status:'conciliado', score:99.3  },
+    { cod:'2.1.05',    desc:'PARCELAMENTOS FISCAIS (REFIS)',   nivel:3, ant:98000,     deb:6000,       cred:5000,       sal:97000,     status:'divergente', score:72.8  },
+    { cod:'2.2',       desc:'PASSIVO NÃO CIRCULANTE',         nivel:2, ant:0,         deb:0,          cred:0,          sal:820000,    status:'',          score:null  },
+    { cod:'2.3',       desc:'PATRIMÔNIO LÍQUIDO',             nivel:2, ant:0,         deb:0,          cred:0,          sal:1350000,   status:'',          score:null  },
+    { cod:'3',         desc:'RECEITAS',                       nivel:1, ant:0,         deb:0,          cred:0,          sal:3200000,   status:'conciliado', score:99.8  },
+    { cod:'3.1',       desc:'RECEITA BRUTA DE VENDAS',        nivel:2, ant:0,         deb:0,          cred:3400000,    sal:3400000,   status:'conciliado', score:99.8  },
+    { cod:'3.2',       desc:'DEDUÇÕES DA RECEITA',            nivel:2, ant:0,         deb:200000,     cred:0,          sal:-200000,   status:'conciliado', score:98.5  },
+    { cod:'4',         desc:'CUSTOS',                         nivel:1, ant:0,         deb:1850000,    cred:0,          sal:1850000,   status:'conciliado', score:97.1  },
+    { cod:'5',         desc:'DESPESAS',                       nivel:1, ant:0,         deb:820000,     cred:0,          sal:820000,    status:'pendente',   score:88.4  },
+  ],
+  conciliacoes: [
+    { tipo:'Bancária',      conta:'Banco Itaú CC',           score:71.2, dif:8532.77,  status:'divergente', itens:148, conciliados:105, pendentes:43  },
+    { tipo:'Bancária',      conta:'Banco Bradesco CC',        score:99.1, dif:0,        status:'conciliado', itens:89,  conciliados:89,  pendentes:0   },
+    { tipo:'Clientes',      conta:'Duplicatas a Receber',     score:82.3, dif:15400,    status:'pendente',   itens:67,  conciliados:55,  pendentes:12  },
+    { tipo:'Fornecedores',  conta:'Fornecedores Nacionais',   score:96.4, dif:850,      status:'conciliado', itens:112, conciliados:108, pendentes:4   },
+    { tipo:'Tributos',      conta:'PIS/COFINS',               score:65.3, dif:3200,     status:'divergente', itens:24,  conciliados:16,  pendentes:8   },
+    { tipo:'Empréstimos',   conta:'Banco do Brasil 12345',    score:74.1, dif:2150,     status:'divergente', itens:18,  conciliados:13,  pendentes:5   },
+    { tipo:'Folha',         conta:'Salários Dezembro',        score:99.3, dif:0,        status:'conciliado', itens:35,  conciliados:35,  pendentes:0   },
+    { tipo:'Parcelamentos', conta:'REFIS Parcela 45',         score:72.8, dif:980,      status:'divergente', itens:8,   conciliados:6,   pendentes:2   },
+  ],
+  pares_bancarios: [
+    { data_cont:'02/06/2025', hist:'PIX recebido - Cliente ABC Ltda',        valor:15000.00, data_ext:'02/06/2025', desc_ext:'PIX ENTRADA 15000 ABC LTDA',     score:100, auto:true  },
+    { data_cont:'03/06/2025', hist:'TED recebida - Delta Serviços',          valor:8500.00,  data_ext:'03/06/2025', desc_ext:'TED CR 8500,00 DELTA SERVICOS',   score:95,  auto:true  },
+    { data_cont:'05/06/2025', hist:'Pagamento Fornecedor MegaSupp',          valor:12300.00, data_ext:'05/06/2025', desc_ext:'DEB PIX MEGASUPP MATERIAL',       score:90,  auto:true  },
+    { data_cont:'06/06/2025', hist:'Resgate Aplicação CDB',                  valor:50000.00, data_ext:'07/06/2025', desc_ext:'RESG CDB 50000',                  score:95,  auto:true  },
+    { data_cont:'10/06/2025', hist:'Boleto Fornecedor XYZ',                  valor:7800.00,  data_ext:'10/06/2025', desc_ext:'BOLETO 7800,00 REF 45678',        score:70,  auto:false },
+    { data_cont:'12/06/2025', hist:'Pagamento folha julho/2025',             valor:95000.00, data_ext:'12/06/2025', desc_ext:'FOLHA PAGAMENTO JUL25',           score:100, auto:true  },
+    { data_cont:'15/06/2025', hist:'Recebimento NF 00890 cliente Beta',      valor:23500.00, data_ext:'15/06/2025', desc_ext:'PIX ENTRADA BETA SERVICOS',       score:90,  auto:true  },
+    { data_cont:'18/06/2025', hist:'Tarifa bancária mensal',                 valor:380.00,   data_ext:'18/06/2025', desc_ext:'TARIFA MANUTENCAO CONTA',         score:95,  auto:true  },
+    { data_cont:'20/06/2025', hist:'DARF IRPJ 2º trim/2025',                valor:38000.00, data_ext:'20/06/2025', desc_ext:'DARF 38000 IRPJ',                 score:100, auto:true  },
+    { data_cont:'22/06/2025', hist:'Despesa não identificada — ⚠️ REVISAR', valor:8532.77,  data_ext:'—',          desc_ext:'Sem correspondência no extrato',  score:0,   auto:false },
+  ],
+};
+
+// ─────────────────────────────────────────────
+// NAVEGAÇÃO
+// ─────────────────────────────────────────────
+const PAGE_TITLES = {
+  dashboard:'Dashboard Executivo', balancete:'Balancetes',
+  conciliacao:'Conciliações', auditoria:'Auditoria',
+  sped:'SPED ECD / ECF', relatorios:'Relatórios',
+  empresas:'Empresas', config:'Configurações', integracoes:'Integrações',
+  deploy:'🚀 Guia de Deploy',
+};
+
+function showPage(name) {
+  document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.sidebar-link').forEach(l => l.classList.remove('active'));
+  const pg = document.getElementById('page-' + name);
+  pg.classList.remove('hidden');
+  pg.classList.add('fade-in');
+  document.getElementById('nav-' + name)?.classList.add('active');
+  document.getElementById('topbar-title').textContent = PAGE_TITLES[name] || name;
+  renderPage(name);
+}
+
+function renderPage(name) {
+  const el = document.getElementById('page-' + name);
+  if (el.dataset.rendered) return;
+  el.dataset.rendered = '1';
+  const fn = PAGES[name];
+  if (fn) el.innerHTML = fn();
+  if (name === 'dashboard') initCharts();
+}
+
+// ─────────────────────────────────────────────
+// PAGES
+// ─────────────────────────────────────────────
+const PAGES = {
+
+// ── DASHBOARD ──────────────────────────────────
+dashboard: () => `
+<div class="space-y-5">
+  <!-- KPIs -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    ${kpi('🏢','5','Empresas Ativas','blue')}
+    ${kpi('✅','94.1%','Score Médio Conciliação','green')}
+    ${kpi('⚠️','R$ 38.515,54','Diferenças Identificadas','red')}
+    ${kpi('📋','14','Balancetes do Mês','blue')}
+  </div>
+
+  <!-- Barra de progresso geral -->
+  <div class="card p-5">
+    <div class="flex items-center justify-between mb-3">
+      <div>
+        <h2 class="font-semibold text-gray-700">Nível de Conciliação Geral — Jun/2025</h2>
+        <p class="text-sm text-gray-400">5 empresas · 8 tipos de conciliação</p>
+      </div>
+      <span class="text-2xl font-bold text-green-600">94.1%</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-5">
+      <div class="h-5 rounded-full bg-green-500 score-bar flex items-center justify-end pr-2" style="width:94.1%">
+        <span class="text-white text-xs font-bold">94.1%</span>
+      </div>
+    </div>
+    <div class="flex gap-4 mt-2 text-xs text-gray-500">
+      <span>🟢 Meta: 95%</span><span>🟡 Atenção: 70–90%</span><span>🔴 Crítico: &lt;70%</span>
+    </div>
+  </div>
+
+  <!-- Gráficos -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+    <div class="card p-4">
+      <h3 class="font-semibold text-gray-600 mb-3">Score por Empresa</h3>
+      <canvas id="chart-empresas" height="180"></canvas>
+    </div>
+    <div class="card p-4">
+      <h3 class="font-semibold text-gray-600 mb-3">Conciliações por Tipo</h3>
+      <canvas id="chart-tipos" height="180"></canvas>
+    </div>
+  </div>
+
+  <!-- Status por empresa -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-gray-50 border-b flex items-center justify-between">
+      <h3 class="font-semibold text-gray-700">Status por Empresa</h3>
+      <span class="text-sm text-gray-400">Jun/2025</span>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+        <tr>
+          <th class="text-left px-5 py-2">Empresa</th>
+          <th class="text-left px-4 py-2">CNPJ</th>
+          <th class="text-left px-4 py-2">Regime</th>
+          <th class="text-center px-4 py-2">Score</th>
+          <th class="text-center px-4 py-2">Status</th>
+          <th class="text-center px-4 py-2">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${DEMO.empresas.map(e => `
+        <tr class="border-b hover:bg-gray-50 transition-colors">
+          <td class="px-5 py-2.5 font-medium text-gray-800">${e.nome}</td>
+          <td class="px-4 py-2.5 text-gray-500 font-mono text-xs">${e.cnpj}</td>
+          <td class="px-4 py-2.5 text-gray-500 text-xs">${e.regime}</td>
+          <td class="px-4 py-2.5 text-center">
+            <span class="font-bold ${e.score>=90?'text-green-600':e.score>=70?'text-yellow-600':'text-red-600'}">${e.score}%</span>
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            <span class="status-badge ${e.status==='conciliado'?'badge-green':e.status==='divergente'?'badge-red':'badge-yellow'}">
+              ${e.status==='conciliado'?'✅ Conciliado':e.status==='divergente'?'⚠️ Divergente':'⏳ Pendente'}
+            </span>
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            <button onclick="showPage('balancete')" class="text-blue-600 hover:text-blue-800 text-xs font-medium">Ver balancete →</button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Alertas IA -->
+  <div class="card p-4 border-l-4 border-amber-400">
+    <h3 class="font-semibold text-amber-700 mb-3">🤖 Alertas da Inteligência Artificial</h3>
+    <div class="space-y-2">
+      ${alertaIA('alto', 'Alpha Comércio', '1.1.01.002 Banco Itaú', 'Diferença de R$ 8.532,77 não identificada no extrato. Possível lançamento duplicado ou transação não registrada.')}
+      ${alertaIA('medio', 'Beta Serviços', '2.1.03.003 PIS/COFINS', 'Saldo a pagar de R$ 32.500,00 sem guia de pagamento correspondente no período.')}
+      ${alertaIA('medio', 'Delta Holding', '2.1.02 Empréstimos', 'Divergência de R$ 2.150,00 entre contrato e saldo contábil. Verificar juros não provisionados.')}
+      ${alertaIA('baixo', 'Alpha Comércio', '5.x Despesas', 'Lançamento atípico: despesa de R$ 45.000,00 em conta "Despesas Diversas" — 340% acima da média mensal.')}
+    </div>
+  </div>
+</div>`,
+
+// ── BALANCETE ──────────────────────────────────
+balancete: () => `
+<div class="space-y-4">
+  <!-- Importar -->
+  <div class="card p-5">
+    <h2 class="font-semibold text-gray-700 mb-3">📥 Importar Balancete</h2>
+    <div class="grid grid-cols-3 gap-4 mb-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Empresa</label>
+        <select class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50">
+          ${DEMO.empresas.map(e=>`<option>${e.nome}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Competência</label>
+        <input type="month" value="2025-06" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Formato</label>
+        <select class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50">
+          <option>🔍 Detectar automaticamente</option>
+          <option>📊 Excel (.xlsx/.xls)</option>
+          <option>📄 CSV</option>
+          <option>🗂️ SPED ECD</option>
+          <option>📑 PDF</option>
+        </select>
+      </div>
+    </div>
+    <div class="border-2 border-dashed border-gray-300 rounded-xl p-6 text-center bg-gray-50 hover:border-blue-400 transition-colors cursor-pointer mb-4" onclick="simularImport()">
+      <div class="text-3xl mb-2">📂</div>
+      <p class="text-gray-600 font-medium">Arraste ou clique para selecionar o balancete</p>
+      <p class="text-xs text-gray-400 mt-1">SCI · Omie · Conta Azul · Excel · CSV · SPED ECD · PDF</p>
+    </div>
+    <div class="flex flex-wrap gap-2 mb-4">
+      ${['SCI Único','SCI Visual','Omie','Conta Azul','Bling','Excel Padrão','SPED ECD','PDF via OCR'].map(f=>`
+        <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">${f}</span>`).join('')}
+    </div>
+  </div>
+
+  <!-- Balancete Viewer -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-gray-50 border-b flex flex-wrap items-center justify-between gap-3">
+      <div>
+        <h3 class="font-semibold text-gray-700">Alpha Comércio Ltda — Jun/2025</h3>
+        <p class="text-xs text-gray-400">34 contas · Importado há 2h · Formato: Excel (SCI Único)</p>
+      </div>
+      <div class="flex items-center gap-3">
+        <div class="w-40">
+          <div class="w-full bg-gray-200 rounded-full h-2.5">
+            <div class="h-2.5 rounded-full bg-green-500" style="width:94.1%"></div>
+          </div>
+          <p class="text-xs text-gray-400 text-right mt-0.5">94.1% conciliado</p>
+        </div>
+        <button class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">🔍 Conciliar Tudo</button>
+        <button class="text-sm bg-green-600 text-white px-3 py-1.5 rounded-lg hover:bg-green-700">📥 Exportar</button>
+      </div>
+    </div>
+    <!-- Filtros -->
+    <div class="px-4 py-3 border-b flex gap-3 flex-wrap bg-white">
+      <input type="text" placeholder="🔍 Buscar código ou descrição..." class="flex-1 border rounded-lg px-3 py-1.5 text-sm min-w-48 focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      <select class="border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <option>Todos os status</option>
+        <option>⏳ Pendentes</option>
+        <option>✅ Conciliados</option>
+        <option>⚠️ Divergentes</option>
+      </select>
+      <select class="border rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+        <option>Todos os níveis</option>
+        <option>Nível 1 (grupos)</option>
+        <option>Nível 4 (analíticas)</option>
+      </select>
+    </div>
+    <div class="overflow-x-auto">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-50 border-b text-gray-500 uppercase text-xs">
+        <tr>
+          <th class="text-left px-4 py-2.5 font-semibold w-36">Código</th>
+          <th class="text-left px-3 py-2.5 font-semibold">Descrição</th>
+          <th class="text-right px-3 py-2.5 font-semibold">Saldo Ant.</th>
+          <th class="text-right px-3 py-2.5 font-semibold">Débitos</th>
+          <th class="text-right px-3 py-2.5 font-semibold">Créditos</th>
+          <th class="text-right px-3 py-2.5 font-semibold">Saldo Atual</th>
+          <th class="text-center px-3 py-2.5 font-semibold">Score</th>
+          <th class="text-center px-3 py-2.5 font-semibold">Status</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${DEMO.balancete.map(c => {
+          const pl = (c.nivel - 1) * 14 + 16;
+          const rowBg = c.nivel<=2 ? 'bg-blue-50 font-semibold' : c.status==='divergente' ? 'bg-red-50' : 'hover:bg-gray-50';
+          const scoreBadge = c.score===null ? '—' :
+            `<span class="px-1.5 py-0.5 rounded text-xs font-bold font-mono ${c.score>=95?'bg-green-100 text-green-700':c.score>=70?'bg-yellow-100 text-yellow-700':'bg-red-100 text-red-700'}">${c.score}%</span>`;
+          const stBadge = !c.status ? '' :
+            `<span class="status-badge ${c.status==='conciliado'?'badge-green':c.status==='divergente'?'badge-red':'badge-yellow'}">${c.status==='conciliado'?'✅':c.status==='divergente'?'⚠️':'⏳'} ${c.status}</span>`;
+          return `<tr class="border-b ${rowBg} transition-colors">
+            <td class="px-4 py-2 font-mono text-gray-600" style="padding-left:${pl}px">${c.cod}</td>
+            <td class="px-3 py-2 text-gray-800">${c.desc}</td>
+            <td class="px-3 py-2 text-right text-gray-500">${fmt(c.ant)}</td>
+            <td class="px-3 py-2 text-right text-blue-600">${fmt(c.deb)}</td>
+            <td class="px-3 py-2 text-right text-purple-600">${fmt(c.cred)}</td>
+            <td class="px-3 py-2 text-right font-medium text-gray-800">${fmt(c.sal)}</td>
+            <td class="px-3 py-2 text-center">${scoreBadge}</td>
+            <td class="px-3 py-2 text-center">${stBadge}</td>
+          </tr>`;
+        }).join('')}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>`,
+
+// ── CONCILIAÇÃO ────────────────────────────────
+conciliacao: () => `
+<div class="space-y-4">
+  <!-- Resumo -->
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    ${kpi('🔍','8','Conciliações Ativas','blue')}
+    ${kpi('✅','3','Aprovadas','green')}
+    ${kpi('⚠️','4','Com Divergência','red')}
+    ${kpi('⏳','1','Pendente Manual','yellow')}
+  </div>
+
+  <!-- Lista de conciliações -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-gray-50 border-b flex items-center justify-between">
+      <h3 class="font-semibold text-gray-700">Conciliações — Alpha Comércio Ltda · Jun/2025</h3>
+      <button onclick="showPage('conciliacao')" class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">+ Nova Conciliação</button>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+        <tr>
+          <th class="text-left px-4 py-2.5">Tipo</th>
+          <th class="text-left px-4 py-2.5">Conta / Descrição</th>
+          <th class="text-right px-4 py-2.5">Itens</th>
+          <th class="text-right px-4 py-2.5">Conciliados</th>
+          <th class="text-right px-4 py-2.5">Pendentes</th>
+          <th class="text-right px-4 py-2.5">Diferença</th>
+          <th class="text-center px-4 py-2.5">Score</th>
+          <th class="text-center px-4 py-2.5">Status</th>
+          <th class="text-center px-4 py-2.5">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${DEMO.conciliacoes.map(c => `
+        <tr class="border-b hover:bg-gray-50 transition-colors ${c.status==='divergente'?'bg-red-50':''}">
+          <td class="px-4 py-3">
+            <span class="text-xs px-2 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700">${c.tipo}</span>
+          </td>
+          <td class="px-4 py-3 font-medium text-gray-800">${c.conta}</td>
+          <td class="px-4 py-3 text-right text-gray-500">${c.itens}</td>
+          <td class="px-4 py-3 text-right text-green-600 font-medium">${c.conciliados}</td>
+          <td class="px-4 py-3 text-right ${c.pendentes>0?'text-red-600 font-medium':'text-gray-400'}">${c.pendentes}</td>
+          <td class="px-4 py-3 text-right font-medium ${c.dif>0?'text-red-600':'text-gray-400'}">
+            ${c.dif>0?`R$ ${c.dif.toLocaleString('pt-BR',{minimumFractionDigits:2})}`:'—'}
+          </td>
+          <td class="px-4 py-3 text-center">
+            <span class="font-bold font-mono text-sm ${c.score>=90?'text-green-600':c.score>=70?'text-yellow-600':'text-red-600'}">${c.score}%</span>
+          </td>
+          <td class="px-4 py-3 text-center">
+            <span class="status-badge ${c.status==='conciliado'?'badge-green':c.status==='divergente'?'badge-red':'badge-yellow'}">
+              ${c.status==='conciliado'?'✅ OK':c.status==='divergente'?'⚠️ Divergente':'⏳ Pendente'}
+            </span>
+          </td>
+          <td class="px-4 py-3 text-center">
+            <button onclick="showDetalhe()" class="text-blue-600 hover:text-blue-800 text-xs font-medium mr-2">Ver</button>
+            <button class="text-green-600 hover:text-green-800 text-xs font-medium">Aprovar</button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+
+  <!-- Detalhe Bancária Itaú -->
+  <div class="card overflow-hidden" id="detalhe-conc">
+    <div class="px-5 py-3 border-b bg-red-50 flex items-center justify-between">
+      <div>
+        <h3 class="font-semibold text-red-700">⚠️ Detalhamento — Banco Itaú CC 12345-6</h3>
+        <p class="text-xs text-red-500">Score: 71.2% · Diferença: R$ 8.532,77 não identificada</p>
+      </div>
+      <div class="text-right">
+        <div class="text-xs text-gray-500">Saldo Contábil</div>
+        <div class="font-bold text-gray-800">R$ 240.000,00</div>
+        <div class="text-xs text-gray-500 mt-1">Saldo Extrato</div>
+        <div class="font-bold text-gray-800">R$ 231.467,23</div>
+      </div>
+    </div>
+    <div class="overflow-x-auto">
+    <table class="w-full text-xs">
+      <thead class="bg-gray-50 border-b text-gray-500">
+        <tr>
+          <th class="text-left px-3 py-2">Data Contábil</th>
+          <th class="text-left px-3 py-2">Histórico / Lançamento</th>
+          <th class="text-right px-3 py-2">Valor</th>
+          <th class="text-left px-3 py-2">Data Extrato</th>
+          <th class="text-left px-3 py-2 max-w-xs">Descrição Extrato</th>
+          <th class="text-center px-3 py-2">Score</th>
+          <th class="text-center px-3 py-2">Tipo</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${DEMO.pares_bancarios.map(p => `
+        <tr class="border-b ${p.score===0?'bg-red-50':p.auto?'hover:bg-gray-50':'bg-yellow-50'} transition-colors">
+          <td class="px-3 py-2 font-mono">${p.data_cont}</td>
+          <td class="px-3 py-2 text-gray-700 max-w-xs truncate">${p.hist}</td>
+          <td class="px-3 py-2 text-right font-medium">R$ ${p.valor.toLocaleString('pt-BR',{minimumFractionDigits:2})}</td>
+          <td class="px-3 py-2 font-mono text-gray-500">${p.data_ext}</td>
+          <td class="px-3 py-2 text-gray-500 max-w-xs truncate">${p.desc_ext}</td>
+          <td class="px-3 py-2 text-center">
+            ${p.score===0?'<span class="text-red-600 font-bold">—</span>':`<span class="px-1.5 py-0.5 rounded font-bold font-mono ${p.score>=95?'bg-green-100 text-green-700':p.score>=70?'bg-yellow-100 text-yellow-700':'bg-red-100 text-red-700'}">${p.score}%</span>`}
+          </td>
+          <td class="px-3 py-2 text-center">
+            ${p.score===0?'<span class="status-badge badge-red">🚨 Manual</span>':p.auto?'<span class="status-badge badge-green">✅ Auto</span>':'<span class="status-badge badge-yellow">🔍 Manual</span>'}
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    </div>
+  </div>
+</div>`,
+
+// ── AUDITORIA ──────────────────────────────────
+auditoria: () => `
+<div class="space-y-4">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    ${kpi('📝','12','Papéis de Trabalho','blue')}
+    ${kpi('✅','8','Aprovados','green')}
+    ${kpi('🔍','3','Em Revisão','yellow')}
+    ${kpi('📊','R$ 85.000','Materialidade Geral','blue')}
+  </div>
+
+  <!-- Materialidade -->
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-3">📐 Cálculo de Materialidade — NBC TA 320</h3>
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+      <div class="bg-blue-50 rounded-lg p-3 text-center">
+        <div class="text-xs text-gray-500">Base de Cálculo</div>
+        <div class="font-bold text-blue-700 mt-1">Receita Bruta</div>
+        <div class="text-xs text-gray-500 mt-0.5">R$ 3.400.000</div>
+      </div>
+      <div class="bg-green-50 rounded-lg p-3 text-center">
+        <div class="text-xs text-gray-500">Materialidade Geral</div>
+        <div class="font-bold text-green-700 text-lg mt-1">R$ 85.000</div>
+        <div class="text-xs text-gray-500 mt-0.5">0,5% da receita</div>
+      </div>
+      <div class="bg-yellow-50 rounded-lg p-3 text-center">
+        <div class="text-xs text-gray-500">Materialidade de Execução</div>
+        <div class="font-bold text-yellow-700 text-lg mt-1">R$ 63.750</div>
+        <div class="text-xs text-gray-500 mt-0.5">75% da geral</div>
+      </div>
+      <div class="bg-gray-50 rounded-lg p-3 text-center">
+        <div class="text-xs text-gray-500">Trivialmente Imaterial</div>
+        <div class="font-bold text-gray-600 text-lg mt-1">R$ 4.250</div>
+        <div class="text-xs text-gray-500 mt-0.5">5% da geral</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Índices Financeiros -->
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-3">📊 Índices Financeiros</h3>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      ${indice('Liquidez Corrente','AC / PC','1,94','≥ 1,50','bom','R$ 1,94 disponível para cada R$ 1,00 de dívida circulante')}
+      ${indice('Liquidez Seca','(AC-Est) / PC','1,41','≥ 1,00','bom','Boa liquidez sem dependência de estoques')}
+      ${indice('Endividamento Total','PT / AT','52.6%','≤ 60%','bom','52,6% dos ativos financiados por terceiros')}
+      ${indice('Margem Bruta','LB / RL','42.3%','≥ 30%','bom','Margem bruta saudável para o setor')}
+      ${indice('Margem Líquida','LL / RL','16.5%','≥ 10%','bom','Rentabilidade acima do benchmark')}
+      ${indice('ROE','LL / PL','39.2%','≥ 15%','bom','Excelente retorno sobre o patrimônio')}
+    </div>
+  </div>
+
+  <!-- Papéis de Trabalho -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-gray-50 border-b flex items-center justify-between">
+      <h3 class="font-semibold text-gray-700">Papéis de Trabalho Gerados</h3>
+      <button class="text-sm bg-blue-600 text-white px-3 py-1.5 rounded-lg hover:bg-blue-700">+ Gerar Automaticamente</button>
+    </div>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+        <tr>
+          <th class="text-left px-4 py-2">Ref.</th>
+          <th class="text-left px-4 py-2">Tipo</th>
+          <th class="text-left px-4 py-2">Título</th>
+          <th class="text-left px-4 py-2">Responsável</th>
+          <th class="text-center px-4 py-2">Status</th>
+          <th class="text-center px-4 py-2">Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${[
+          ['PT-1.01','Composição de Saldo','Caixa e Equivalentes','Ana Silva','aprovado'],
+          ['PT-1.02','Conciliação Bancária','Banco Itaú CC 12345-6','Carlos Lima','em_revisao'],
+          ['PT-2.01','Circularização','Clientes — Confirmação de Saldos','Ana Silva','aprovado'],
+          ['PT-3.01','Cálculo','Provisão IRPJ/CSLL 2025','Maria Costa','aprovado'],
+          ['PT-4.01','Análise Horizontal','Comparativo Jun/25 vs Jun/24','Ana Silva','em_revisao'],
+          ['PT-4.02','Análise Vertical','DRE — Estrutura percentual','Carlos Lima','rascunho'],
+          ['PT-5.01','Índices Financeiros','Liquidez, Endividamento, Rentabilidade','Maria Costa','aprovado'],
+          ['PT-6.01','Materialidade','Cálculo NBC TA 320','Ana Silva','aprovado'],
+        ].map(([ref,tipo,titulo,resp,status]) => `
+        <tr class="border-b hover:bg-gray-50">
+          <td class="px-4 py-2.5 font-mono text-xs text-blue-600 font-bold">${ref}</td>
+          <td class="px-4 py-2.5"><span class="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">${tipo}</span></td>
+          <td class="px-4 py-2.5 font-medium text-gray-800">${titulo}</td>
+          <td class="px-4 py-2.5 text-gray-500 text-xs">${resp}</td>
+          <td class="px-4 py-2.5 text-center">
+            <span class="status-badge ${status==='aprovado'?'badge-green':status==='em_revisao'?'badge-yellow':'bg-gray-100 text-gray-600'}">
+              ${status==='aprovado'?'✅ Aprovado':status==='em_revisao'?'🔍 Revisão':'📝 Rascunho'}
+            </span>
+          </td>
+          <td class="px-4 py-2.5 text-center">
+            <button class="text-blue-600 text-xs hover:underline mr-2">Ver PDF</button>
+            <button class="text-green-600 text-xs hover:underline">Exportar</button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+  </div>
+</div>`,
+
+// ── SPED ──────────────────────────────────────
+sped: () => `
+<div class="space-y-4">
+  <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+    ${kpi('🗂️','3','SPEDs Importados','blue')}
+    ${kpi('✅','2','Válidos','green')}
+    ${kpi('⚠️','1','Com Alertas','yellow')}
+    ${kpi('🔴','0','Com Erros','red')}
+  </div>
+
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-3">📤 Importar SPED ECD / ECF</h3>
+    <div class="grid grid-cols-2 gap-4 mb-4">
+      <div class="border-2 border-dashed border-blue-200 rounded-xl p-5 text-center bg-blue-50 cursor-pointer hover:border-blue-400 transition-colors">
+        <div class="text-3xl mb-2">🗂️</div>
+        <p class="font-medium text-blue-700">SPED ECD</p>
+        <p class="text-xs text-blue-500">Escrituração Contábil Digital</p>
+        <p class="text-xs text-gray-400 mt-1">.txt</p>
+      </div>
+      <div class="border-2 border-dashed border-purple-200 rounded-xl p-5 text-center bg-purple-50 cursor-pointer hover:border-purple-400 transition-colors">
+        <div class="text-3xl mb-2">📊</div>
+        <p class="font-medium text-purple-700">SPED ECF</p>
+        <p class="text-xs text-purple-500">Escrituração Contábil Fiscal</p>
+        <p class="text-xs text-gray-400 mt-1">.txt</p>
+      </div>
+    </div>
+  </div>
+
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-gray-50 border-b">
+      <h3 class="font-semibold text-gray-700">Arquivo SPED ECD — Alpha Comércio Ltda · 2024</h3>
+    </div>
+    <div class="p-5 space-y-3">
+      <div class="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+        ${['CNPJ: 12.345.678/0001-90','Ano-Calendário: 2024','Leiaute: 10','Total Registros: 48.532'].map(info=>`
+        <div class="bg-gray-50 rounded-lg p-3"><span class="text-gray-600">${info}</span></div>`).join('')}
+      </div>
+      <div class="mt-3">
+        <h4 class="font-medium text-gray-700 mb-2">Validação dos Blocos</h4>
+        <div class="space-y-1.5">
+          ${[
+            ['Bloco 0','Abertura e Identificação','✅ Válido','green'],
+            ['Bloco I','Lançamentos e Balancetes','✅ Válido — 2.847 lançamentos','green'],
+            ['Bloco J','Demonstrações Contábeis','✅ Válido','green'],
+            ['Bloco K','Livro Razão Auxiliar','⚠️ 3 contas com saldo divergente','yellow'],
+            ['Bloco 9','Encerramento','✅ Válido','green'],
+          ].map(([bloco,desc,status,cor])=>`
+          <div class="flex items-center gap-3 p-2.5 rounded-lg bg-${cor}-50 border border-${cor}-200">
+            <span class="font-mono font-bold text-xs text-${cor}-700 w-16">${bloco}</span>
+            <span class="text-sm text-gray-700 flex-1">${desc}</span>
+            <span class="text-xs font-medium text-${cor}-700">${status}</span>
+          </div>`).join('')}
+        </div>
+      </div>
+      <div class="bg-amber-50 border border-amber-200 rounded-lg p-3">
+        <h4 class="font-medium text-amber-700 mb-1.5">⚠️ Divergências Identificadas</h4>
+        <ul class="text-sm text-amber-700 space-y-1">
+          <li>• Conta 1.1.02.001 — Saldo ECD: R$ 280.000,00 · Saldo Balancete: R$ 278.500,00 — Diferença: R$ 1.500,00</li>
+          <li>• Conta 2.1.03.003 — Saldo ECD: R$ 32.500,00 · Saldo Balancete: R$ 35.700,00 — Diferença: R$ 3.200,00</li>
+          <li>• Partida dobrada equilibrada: ✅ Débitos = Créditos = R$ 8.423.840,00</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>`,
+
+// ── EMPRESAS ──────────────────────────────────
+empresas: () => `
+<div class="space-y-4">
+  <div class="flex items-center justify-between">
+    <div class="text-sm text-gray-500">5 empresas cadastradas · Plano Profissional (até 20)</div>
+    <button class="bg-blue-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-blue-700">+ Nova Empresa</button>
+  </div>
+  <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+    ${DEMO.empresas.map(e=>`
+    <div class="card p-5 hover:shadow-md transition-shadow cursor-pointer">
+      <div class="flex items-start justify-between mb-3">
+        <div>
+          <h3 class="font-semibold text-gray-800">${e.nome}</h3>
+          <p class="text-xs text-gray-400 font-mono">${e.cnpj}</p>
+        </div>
+        <span class="status-badge ${e.status==='conciliado'?'badge-green':e.status==='divergente'?'badge-red':'badge-yellow'}">
+          ${e.status==='conciliado'?'✅':e.status==='divergente'?'⚠️':'⏳'}
+        </span>
+      </div>
+      <div class="text-xs text-gray-500 mb-3">${e.regime}</div>
+      <div class="flex items-center justify-between">
+        <div>
+          <div class="text-xs text-gray-400">Score Jun/25</div>
+          <div class="font-bold text-lg ${e.score>=90?'text-green-600':e.score>=70?'text-yellow-600':'text-red-600'}">${e.score}%</div>
+        </div>
+        <div class="w-24">
+          <div class="w-full bg-gray-200 rounded-full h-2">
+            <div class="h-2 rounded-full ${e.score>=90?'bg-green-500':e.score>=70?'bg-yellow-500':'bg-red-500'}" style="width:${e.score}%"></div>
+          </div>
+        </div>
+      </div>
+      <div class="mt-3 pt-3 border-t flex gap-2">
+        <button onclick="showPage('balancete')" class="flex-1 text-xs text-center text-blue-600 hover:text-blue-800">📋 Balancete</button>
+        <button onclick="showPage('conciliacao')" class="flex-1 text-xs text-center text-green-600 hover:text-green-800">🔍 Conciliar</button>
+        <button onclick="showPage('auditoria')" class="flex-1 text-xs text-center text-purple-600 hover:text-purple-800">📝 Auditoria</button>
+      </div>
+    </div>`).join('')}
+  </div>
+</div>`,
+
+// ── INTEGRAÇÕES ──────────────────────────────
+integracoes: () => `
+<div class="space-y-4">
+  <div class="card p-5">
+    <h2 class="font-semibold text-gray-700 mb-4">🔌 Integrações Disponíveis</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      ${[
+        ['SCI Único','ERP Contábil','Conectado','green'],
+        ['SCI Visual Practice','ERP Contábil','Conectado','green'],
+        ['SCI Folha','Folha de Pagamento','Conectado','green'],
+        ['Omie','ERP Empresarial','Configurar','yellow'],
+        ['Conta Azul','ERP PME','Configurar','yellow'],
+        ['Bling','ERP/NF-e','Configurar','yellow'],
+        ['Banco Itaú (API)','Open Finance','Conectado','green'],
+        ['Banco Bradesco (API)','Open Finance','Conectado','green'],
+        ['SEFAZ NF-e','XML de NF','Conectado','green'],
+        ['SPED Receita Federal','ECD/ECF','Conectado','green'],
+        ['OpenAI GPT-4o','Motor de IA','Ativo','green'],
+        ['AWS S3','Armazenamento','Ativo','green'],
+      ].map(([nome,tipo,status,cor])=>`
+      <div class="border rounded-xl p-4 ${cor==='green'?'border-green-200 bg-green-50':'border-yellow-200 bg-yellow-50'}">
+        <div class="font-medium text-gray-800 text-sm">${nome}</div>
+        <div class="text-xs text-gray-500 mt-0.5">${tipo}</div>
+        <div class="mt-2 flex items-center justify-between">
+          <span class="text-xs font-medium ${cor==='green'?'text-green-600':'text-yellow-600'}">
+            ${cor==='green'?'🟢 '+status:'🟡 '+status}
+          </span>
+          <button class="text-xs text-blue-600 hover:underline">${cor==='green'?'Config':'Conectar'}</button>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>
+</div>`,
+
+// ── RELATÓRIOS ────────────────────────────────
+relatorios: () => `
+<div class="space-y-4">
+  <div class="card p-5">
+    <h2 class="font-semibold text-gray-700 mb-4">📑 Gerador de Relatórios</h2>
+    <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
+      ${[
+        ['📊','Balanço Patrimonial','Excel · PDF · Word'],
+        ['📈','DRE — Resultado do Exercício','Excel · PDF · Word'],
+        ['💵','DFC — Fluxo de Caixa','Excel · PDF'],
+        ['📋','DMPL — Mutações do PL','Excel · PDF'],
+        ['🔍','Relatório de Conciliação','Excel · PDF'],
+        ['📝','Papéis de Trabalho','PDF · Word'],
+        ['🗂️','SPED ECD — Validação','PDF'],
+        ['📉','Análise Horizontal/Vertical','Excel · PDF'],
+        ['💡','Índices Financeiros','Excel · PDF'],
+      ].map(([icone,nome,formatos])=>`
+      <div class="border rounded-xl p-4 hover:shadow-sm hover:border-blue-300 transition-all cursor-pointer">
+        <div class="text-2xl mb-2">${icone}</div>
+        <div class="font-medium text-gray-800 text-sm">${nome}</div>
+        <div class="text-xs text-gray-400 mt-1">${formatos}</div>
+        <button class="mt-2 text-xs text-blue-600 hover:text-blue-800 font-medium">Gerar →</button>
+      </div>`).join('')}
+    </div>
+  </div>
+</div>`,
+
+// ── CONFIG ────────────────────────────────────
+config: () => `
+<div class="space-y-4">
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-4">⚙️ Configurações do Escritório</h3>
+    <div class="space-y-4 max-w-xl">
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Nome do Escritório</label>
+        <input type="text" value="Silva &amp; Associados Contabilidade" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">CNPJ</label>
+        <input type="text" value="98.765.432/0001-10" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Score mínimo para aprovação automática</label>
+        <input type="range" min="70" max="100" value="90" class="w-full">
+        <p class="text-xs text-gray-500 mt-1">Atual: 90% — Abaixo disso, enviar para revisão manual</p>
+      </div>
+      <div>
+        <label class="block text-sm font-medium text-gray-700 mb-1">Janela de tolerância de datas (dias)</label>
+        <input type="number" value="5" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none">
+      </div>
+      <button class="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700">Salvar Configurações</button>
+    </div>
+  </div>
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-3">🔐 Segurança</h3>
+    <div class="space-y-2 text-sm">
+      <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+        <span>MFA (Autenticação de 2 Fatores)</span>
+        <span class="text-green-600 font-medium">✅ Ativo</span>
+      </div>
+      <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+        <span>Criptografia de dados em repouso</span>
+        <span class="text-green-600 font-medium">✅ Ativo (AES-256)</span>
+      </div>
+      <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+        <span>Logs de auditoria de acesso</span>
+        <span class="text-green-600 font-medium">✅ Ativo</span>
+      </div>
+      <div class="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+        <span>Conformidade LGPD</span>
+        <span class="text-green-600 font-medium">✅ Certificado</span>
+      </div>
+    </div>
+  </div>
+</div>`,
+
+// ── DEPLOY ────────────────────────────────────
+deploy: () => `
+<div class="space-y-5">
+
+  <!-- Cabeçalho -->
+  <div class="card p-5 border-l-4 border-blue-500">
+    <h2 class="text-xl font-bold text-gray-800 mb-1">🚀 Deploy Online — Guia Completo</h2>
+    <p class="text-sm text-gray-500">Siga os 4 passos abaixo para colocar o ContaMax no ar <strong>gratuitamente</strong>.</p>
+    <div class="mt-3 flex flex-wrap gap-2 text-xs">
+      <span class="bg-black text-white px-2 py-1 rounded-full font-medium">▲ Vercel — Frontend</span>
+      <span class="bg-purple-600 text-white px-2 py-1 rounded-full font-medium">🚂 Railway — Backend</span>
+      <span class="bg-green-600 text-white px-2 py-1 rounded-full font-medium">🌿 Neon — PostgreSQL</span>
+      <span class="bg-red-600 text-white px-2 py-1 rounded-full font-medium">⚡ Upstash — Redis</span>
+    </div>
+  </div>
+
+  <!-- Arquitetura -->
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-3">🗺️ Arquitetura de Produção</h3>
+    <div class="bg-gray-900 rounded-xl p-4 font-mono text-xs text-green-400 leading-relaxed overflow-x-auto">
+<pre>  Usuário
+     │
+     ▼
+┌─────────────────────────────────────┐
+│  VERCEL  (grátis)                   │
+│  contamax.vercel.app                │
+│  → React + Vite (build estático)    │
+└──────────────┬──────────────────────┘
+               │  chamadas /api/v1/...
+               ▼
+┌─────────────────────────────────────┐
+│  RAILWAY  (~$5/mês ou grátis c/     │
+│           $5 crédito mensal)        │
+│  contamax-api.up.railway.app        │
+│  → FastAPI  (web service)           │
+│  → Celery   (worker service)        │
+└──────┬──────────────────────────────┘
+       │
+  ┌────┴──────────────────────────────┐
+  │                                   │
+  ▼                                   ▼
+┌──────────────┐            ┌──────────────────┐
+│  NEON.TECH   │            │   UPSTASH.COM    │
+│  PostgreSQL  │            │   Redis grátis   │
+│  + pgvector  │            │   (Celery fila)  │
+│  grátis      │            └──────────────────┘
+└──────────────┘
+       │
+       ▼
+┌──────────────────┐
+│  CLOUDFLARE R2   │
+│  Uploads/Arquivos│
+│  10GB grátis     │
+└──────────────────┘</pre>
+    </div>
+  </div>
+
+  <!-- Passo 1 — Neon -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-green-600 text-white flex items-center gap-3">
+      <span class="w-7 h-7 bg-white text-green-700 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">1</span>
+      <div>
+        <div class="font-bold">Banco de Dados — Neon PostgreSQL</div>
+        <div class="text-green-100 text-xs">neon.tech · Grátis · 0.5 GB · pgvector incluído</div>
+      </div>
+    </div>
+    <div class="p-5 space-y-3">
+      ${passo('Acesse', 'neon.tech e clique em <strong>"Start Free"</strong>')}
+      ${passo('Crie o projeto', 'Project Name: <code class="bg-gray-100 px-1 rounded">contamax</code> · Region: <code class="bg-gray-100 px-1 rounded">AWS us-east-1</code> (São Paulo: use us-east-2)')}
+      ${passo('Copie a Connection String', 'Em <em>Dashboard → Connection Details</em>, copie a URL no formato:<br><code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs block mt-1">postgresql://user:pass@ep-xxx.us-east-2.aws.neon.tech/neondb?sslmode=require</code>')}
+      ${passo('Ative pgvector', 'No SQL Editor do Neon execute:<br><code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs block mt-1">CREATE EXTENSION IF NOT EXISTS vector;</code>')}
+    </div>
+  </div>
+
+  <!-- Passo 2 — Upstash -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-red-600 text-white flex items-center gap-3">
+      <span class="w-7 h-7 bg-white text-red-700 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">2</span>
+      <div>
+        <div class="font-bold">Redis — Upstash</div>
+        <div class="text-red-100 text-xs">upstash.com · Grátis · 10.000 comandos/dia</div>
+      </div>
+    </div>
+    <div class="p-5 space-y-3">
+      ${passo('Acesse', 'upstash.com → <strong>Create Database</strong>')}
+      ${passo('Configure', 'Name: <code class="bg-gray-100 px-1 rounded">contamax-redis</code> · Region: <code class="bg-gray-100 px-1 rounded">us-east-1</code> · TLS: ✅ habilitado')}
+      ${passo('Copie a URL', 'Em <em>Details → REST URL</em>, copie a URL Redis:<br><code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs block mt-1">rediss://default:SENHA@xxx.upstash.io:6379</code>')}
+    </div>
+  </div>
+
+  <!-- Passo 3 — Railway -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-purple-700 text-white flex items-center gap-3">
+      <span class="w-7 h-7 bg-white text-purple-700 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">3</span>
+      <div>
+        <div class="font-bold">Backend — Railway</div>
+        <div class="text-purple-100 text-xs">railway.app · $5 crédito grátis/mês · FastAPI + Celery</div>
+      </div>
+    </div>
+    <div class="p-5 space-y-3">
+      ${passo('Crie conta', 'railway.app → Login com GitHub')}
+      ${passo('Novo projeto', '<strong>New Project → Deploy from GitHub Repo</strong> → selecione seu repositório')}
+      ${passo('Configure o serviço', 'Root Directory: <code class="bg-gray-100 px-1 rounded">backend</code>')}
+      ${passo('Variáveis de ambiente', 'Em <em>Variables</em>, adicione todas as variáveis do <code class="bg-gray-100 px-1 rounded">.env.production</code>:<br><br>' +
+        '<div class="bg-gray-900 rounded-lg p-3 font-mono text-xs text-green-400 space-y-0.5">' +
+        '<div>DATABASE_URL = postgresql+asyncpg://...</div>' +
+        '<div>REDIS_URL = rediss://...</div>' +
+        '<div>OPENAI_API_KEY = sk-...</div>' +
+        '<div>SECRET_KEY = (gere com python -c "import secrets; print(secrets.token_hex(32))")</div>' +
+        '<div>ENVIRONMENT = production</div>' +
+        '<div>ALLOWED_ORIGINS = https://contamax.vercel.app</div>' +
+        '</div>')}
+      ${passo('Adicione o worker Celery', '<strong>New Service → GitHub Repo</strong> (mesmo repo) → Root: <code class="bg-gray-100 px-1 rounded">backend</code><br>Start Command: <code class="bg-gray-100 px-1 rounded text-xs">celery -A app.workers.celery_app worker --loglevel=info</code>')}
+      ${passo('Anote a URL', 'Copie a URL pública do Railway, ex: <code class="bg-gray-100 px-1 rounded text-xs">contamax-api.up.railway.app</code>')}
+    </div>
+  </div>
+
+  <!-- Passo 4 — Vercel -->
+  <div class="card overflow-hidden">
+    <div class="px-5 py-3 bg-gray-900 text-white flex items-center gap-3">
+      <span class="w-7 h-7 bg-white text-gray-900 rounded-full flex items-center justify-center font-bold text-sm flex-shrink-0">4</span>
+      <div>
+        <div class="font-bold">Frontend — Vercel</div>
+        <div class="text-gray-300 text-xs">vercel.com · 100% grátis · CDN global</div>
+      </div>
+    </div>
+    <div class="p-5 space-y-3">
+      ${passo('Crie conta', 'vercel.com → Login com GitHub')}
+      ${passo('Importe o projeto', '<strong>Add New → Project → Import Git Repository</strong>')}
+      ${passo('Configure', 'Framework: <code class="bg-gray-100 px-1 rounded">Vite</code> · Root Directory: <code class="bg-gray-100 px-1 rounded">frontend</code>')}
+      ${passo('Variável de ambiente', 'Em <em>Environment Variables</em> adicione:<br><code class="bg-gray-100 px-1.5 py-0.5 rounded text-xs block mt-1">VITE_API_URL = https://contamax-api.up.railway.app</code>')}
+      ${passo('Deploy', 'Clique em <strong>Deploy</strong> — em ~2 minutos seu app estará em <code class="bg-gray-100 px-1 rounded">contamax.vercel.app</code>')}
+      ${passo('Domínio próprio (opcional)', 'Em <em>Settings → Domains</em> adicione <code class="bg-gray-100 px-1 rounded">app.seuescritorio.com.br</code>')}
+    </div>
+  </div>
+
+  <!-- Custos -->
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-3">💰 Custos Estimados</h3>
+    <table class="w-full text-sm">
+      <thead class="bg-gray-50 border-b text-xs text-gray-500 uppercase">
+        <tr>
+          <th class="text-left px-3 py-2">Serviço</th>
+          <th class="text-left px-3 py-2">Plano Grátis</th>
+          <th class="text-right px-3 py-2">Pago (escala)</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${custo('▲ Vercel','Ilimitado (frontend estático)','$20/mês — Pro')}
+        ${custo('🚂 Railway','$5 crédito/mês','$20/mês — 8GB RAM')}
+        ${custo('🌿 Neon','0.5 GB · 1 branch','$19/mês — 10 GB')}
+        ${custo('⚡ Upstash Redis','10k cmds/dia · 256 MB','$0,20/100k cmds')}
+        ${custo('☁️ Cloudflare R2','10 GB · 1M req/mês','$0,015/GB adicional')}
+        ${custo('🤖 OpenAI GPT-4o','—','~$0,01-0,05/análise')}
+      </tbody>
+      <tfoot class="border-t">
+        <tr>
+          <td class="px-3 py-2 font-bold text-green-700" colspan="2">💚 Custo inicial (até ~50 empresas)</td>
+          <td class="px-3 py-2 text-right font-bold text-green-700">R$ 0 — R$ 30/mês</td>
+        </tr>
+      </tfoot>
+    </table>
+  </div>
+
+  <!-- GitHub Actions CI/CD -->
+  <div class="card p-5">
+    <h3 class="font-semibold text-gray-700 mb-3">⚡ CI/CD Automático com GitHub Actions</h3>
+    <p class="text-sm text-gray-500 mb-3">Ao fazer <code class="bg-gray-100 px-1 rounded">git push</code>, o deploy acontece automaticamente — sem nenhuma ação manual.</p>
+    <div class="bg-gray-900 rounded-xl p-4 font-mono text-xs text-green-400 leading-relaxed overflow-x-auto">
+<pre>  git push main
+       │
+       ├── Vercel detecta mudança em /frontend
+       │   └── build Vite → CDN global em ~60s ✅
+       │
+       └── Railway detecta mudança em /backend
+           └── build Docker → deploy zero-downtime ✅</pre>
+    </div>
+  </div>
+
+</div>`,
+};
+
+// ─────────────────────────────────────────────
+// HELPERS
+// ─────────────────────────────────────────────
+function fmt(v) {
+  if (!v && v!==0) return '—';
+  return new Intl.NumberFormat('pt-BR',{style:'currency',currency:'BRL'}).format(v);
+}
+
+function kpi(icone, valor, label, cor) {
+  const c = {blue:'bg-blue-50 border-blue-200 text-blue-800',green:'bg-green-50 border-green-200 text-green-800',red:'bg-red-50 border-red-200 text-red-800',yellow:'bg-yellow-50 border-yellow-200 text-yellow-800'};
+  return `<div class="border rounded-xl p-4 ${c[cor]||c.blue}">
+    <div class="text-2xl mb-1">${icone}</div>
+    <div class="text-2xl font-bold">${valor}</div>
+    <div class="text-xs mt-1 opacity-75">${label}</div>
+  </div>`;
+}
+
+function alertaIA(nivel, empresa, conta, msg) {
+  const cor = nivel==='alto'?'red':nivel==='medio'?'yellow':'blue';
+  const icone = nivel==='alto'?'🚨':nivel==='medio'?'⚠️':'💡';
+  return `<div class="flex gap-3 p-3 bg-white border border-${cor}-100 rounded-lg">
+    <span class="text-lg">${icone}</span>
+    <div class="flex-1">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="text-xs font-bold text-${cor}-700 uppercase">${nivel}</span>
+        <span class="text-xs text-gray-500">${empresa}</span>
+        <span class="text-xs font-mono text-blue-600">${conta}</span>
+      </div>
+      <p class="text-sm text-gray-700 mt-0.5">${msg}</p>
+    </div>
+  </div>`;
+}
+
+function indice(nome, formula, valor, ref, status, interp) {
+  const c = status==='bom'?'green':'atencao'?'yellow':'red';
+  return `<div class="border rounded-lg p-3">
+    <div class="font-medium text-gray-700 text-sm">${nome}</div>
+    <div class="text-xs text-gray-400 font-mono">${formula}</div>
+    <div class="text-2xl font-bold text-${c}-600 my-1">${valor}</div>
+    <div class="text-xs text-gray-400">Referência: ${ref}</div>
+    <div class="text-xs text-gray-500 mt-1">${interp}</div>
+  </div>`;
+}
+
+function passo(titulo, desc) {
+  return `<div class="flex gap-3">
+    <span class="w-5 h-5 bg-blue-100 text-blue-700 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0 mt-0.5">→</span>
+    <div><span class="font-medium text-gray-700">${titulo}:</span> <span class="text-gray-600 text-sm">${desc}</span></div>
+  </div>`;
+}
+
+function custo(servico, gratis, pago) {
+  return `<tr class="border-b hover:bg-gray-50">
+    <td class="px-3 py-2.5 font-medium text-gray-800">${servico}</td>
+    <td class="px-3 py-2.5 text-green-600 text-xs">${gratis}</td>
+    <td class="px-3 py-2.5 text-right text-gray-500 text-xs">${pago}</td>
+  </tr>`;
+}
+
+function simularImport() {
+  alert('✅ Simulação: Balancete "balancete_jun2025.xlsx" importado!\n\n📊 34 contas processadas\n🔍 Classificação automática concluída\n🤖 IA detectou 4 alertas\n⚡ Conciliação iniciada automaticamente');
+}
+
+function showDetalhe() {
+  document.getElementById('detalhe-conc').scrollIntoView({behavior:'smooth'});
+}
+
+// ─────────────────────────────────────────────
+// CHARTS
+// ─────────────────────────────────────────────
+function initCharts() {
+  // Gráfico por empresa
+  const ctx1 = document.getElementById('chart-empresas');
+  if (ctx1) new Chart(ctx1, {
+    type: 'bar',
+    data: {
+      labels: DEMO.empresas.map(e => e.nome.split(' ')[0]),
+      datasets: [{
+        label: 'Score de Conciliação (%)',
+        data: DEMO.empresas.map(e => e.score),
+        backgroundColor: DEMO.empresas.map(e => e.score>=90?'#16a34a':e.score>=70?'#f59e0b':'#dc2626'),
+        borderRadius: 6,
+      }],
+    },
+    options: { responsive:true, plugins:{legend:{display:false}}, scales:{y:{min:0,max:100,ticks:{callback:v=>v+'%'}}} }
+  });
+
+  // Gráfico por tipo
+  const ctx2 = document.getElementById('chart-tipos');
+  if (ctx2) new Chart(ctx2, {
+    type: 'doughnut',
+    data: {
+      labels: ['Aprovadas','Concluídas','Divergência','Pendentes'],
+      datasets: [{
+        data: [3, 1, 4, 1],
+        backgroundColor: ['#16a34a','#2563eb','#dc2626','#f59e0b'],
+        borderWidth: 2,
+        borderColor: '#fff',
+      }],
+    },
+    options: { responsive:true, plugins:{legend:{position:'bottom'}} }
+  });
+}
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', () => {
+  showPage('dashboard');
+});
+</script>
+</body>
+</html>

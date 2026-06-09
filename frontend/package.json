@@ -1,0 +1,46 @@
+{
+  "name": "contamax-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.23.1",
+    "typescript": "^5.4.5",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "axios": "^1.7.2",
+    "zustand": "^4.5.2",
+    "@tanstack/react-query": "^5.40.0",
+    "react-hook-form": "^7.51.5",
+    "zod": "^3.23.8",
+    "@hookform/resolvers": "^3.6.0",
+    "recharts": "^2.12.7",
+    "react-dropzone": "^14.2.3",
+    "react-hot-toast": "^2.4.1",
+    "date-fns": "^3.6.0",
+    "@headlessui/react": "^2.1.1",
+    "@heroicons/react": "^2.1.4",
+    "clsx": "^2.1.1",
+    "tailwind-merge": "^2.3.0",
+    "react-table": "^7.8.0",
+    "@tanstack/react-table": "^8.17.3",
+    "react-virtualized-auto-sizer": "^1.0.24",
+    "react-window": "^1.8.10",
+    "numeral": "^2.0.6",
+    "react-pdf": "^7.7.3"
+  },
+  "devDependencies": {
+    "vite": "^5.2.12",
+    "@vitejs/plugin-react": "^4.3.0",
+    "tailwindcss": "^3.4.4",
+    "autoprefixer": "^10.4.19",
+    "postcss": "^8.4.38",
+    "@types/numeral": "^2.0.5"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview"
+  }
+}

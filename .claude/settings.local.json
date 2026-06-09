@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p \"C:\\\\Users\\\\Microsoft\\\\Desktop\\\\SISTEMA CONTABIL\\\\.claude\")",
+      "Bash(npm install *)",
+      "PowerShell(Get-Command node, npm, npx, python, pip 2>$null)",
+      "mcp__Claude_Preview__preview_start",
+      "PowerShell(git --version 2>$null; python --version 2>$null; $gh = Get-Command gh -ErrorAction SilentlyContinue; if \\($gh\\) { $gh.Source } else { \"gh: nao encontrado\" })"
+    ]
+  }
+}
