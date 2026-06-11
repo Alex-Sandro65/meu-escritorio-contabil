@@ -55,32 +55,25 @@ async def get_current_user(
 
 @router.post("/register", status_code=status.HTTP_201_CREATED)
 async def register(data: RegisterRequest, db: AsyncSession = Depends(get_db)):
-    import traceback
-    try:
-        result = await db.execute(select(User).where(User.email == data.email))
-        if result.scalar_one_or_none():
-            raise HTTPException(status_code=400, detail="E-mail já cadastrado")
+    result = await db.execute(select(User).where(User.email == data.email))
+    if result.scalar_one_or_none():
+        raise HTTPException(status_code=400, detail="E-mail já cadastrado")
 
-        tenant = Tenant(nome=data.nome_escritorio, cnpj=data.cnpj_escritorio or None)
-        db.add(tenant)
-        await db.flush()
+    tenant = Tenant(nome=data.nome_escritorio, cnpj=data.cnpj_escritorio or None)
+    db.add(tenant)
+    await db.flush()
 
-        from app.models.user import PerfilUsuario
-        user = User(
-            tenant_id=tenant.id,
-            nome=data.nome,
-            email=data.email,
-            hashed_password=hash_password(data.password),
-            perfil=PerfilUsuario.ADMIN,
-        )
-        db.add(user)
-        await db.commit()
-        return {"message": "Cadastro realizado com sucesso", "tenant_id": str(tenant.id)}
-    except HTTPException:
-        raise
-    except Exception as e:
-        tb = traceback.format_exc()
-        raise HTTPException(status_code=500, detail=f"Erro interno: {type(e).__name__}: {str(e)} | {tb[-500:]}")
+    from app.models.user import PerfilUsuario
+    user = User(
+        tenant_id=tenant.id,
+        nome=data.nome,
+        email=data.email,
+        hashed_password=hash_password(data.password),
+        perfil=PerfilUsuario.ADMIN,
+    )
+    db.add(user)
+    await db.commit()
+    return {"message": "Cadastro realizado com sucesso", "tenant_id": str(tenant.id)}
 
 
 @router.post("/login", response_model=TokenResponse)
