@@ -114,6 +114,21 @@ async def mfa_verify(data: MFAVerify, db: AsyncSession = Depends(get_db)):
     )
 
 
+@router.get("/me")
+async def me(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    from app.models.tenant import Tenant
+    result = await db.execute(select(Tenant).where(Tenant.id == current_user.tenant_id))
+    tenant = result.scalar_one_or_none()
+    return {
+        "id": str(current_user.id),
+        "nome": current_user.nome,
+        "email": current_user.email,
+        "perfil": current_user.perfil,
+        "tenant_id": str(current_user.tenant_id),
+        "escritorio": tenant.nome if tenant else "",
+    }
+
+
 @router.post("/mfa/setup")
 async def mfa_setup(current_user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
     secret = generate_mfa_secret()
