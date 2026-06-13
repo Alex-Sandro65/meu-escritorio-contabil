@@ -546,13 +546,14 @@ function showPage(name) {
 
 async function renderPage(name) {
   const el = document.getElementById('page-' + name);
-  const refresh = ['dashboard', 'empresas'];
+  const refresh = ['dashboard', 'empresas', 'conciliacao'];
   if (el.dataset.rendered && !refresh.includes(name)) return;
   el.dataset.rendered = '1';
 
   if (PAGES[name]) el.innerHTML = PAGES[name]();
-  if (name === 'dashboard') renderDashboard(el);
-  if (name === 'empresas')  renderEmpresas(el);
+  if (name === 'dashboard')   renderDashboard(el);
+  if (name === 'empresas')    renderEmpresas(el);
+  if (name === 'conciliacao') renderConciliacao(el);
 }
 
 // ─────────────────────────────────────────────
@@ -914,6 +915,239 @@ function importarBalancete() {
 }
 
 // ─────────────────────────────────────────────
+// CONCILIAÇÃO REAL COM IA
+// ─────────────────────────────────────────────
+
+// Atualiza label do arquivo selecionado
+document.addEventListener('change', (e) => {
+  if (e.target.id === 'conc-file') {
+    const lbl = document.getElementById('conc-file-label');
+    if (lbl && e.target.files[0]) lbl.textContent = '📄 ' + e.target.files[0].name;
+  }
+});
+
+async function renderConciliacao(el) {
+  // Atualiza o select de empresas com os dados reais
+  const sel = document.getElementById('conc-empresa');
+  if (sel && EMPRESAS_REAIS.length > 0) {
+    sel.innerHTML = '<option value="">Selecione a empresa...</option>' +
+      EMPRESAS_REAIS.map(e => `<option value="${e.id||''}">${e.razao_social||e.nome}</option>`).join('');
+  }
+}
+
+async function processarExtrato() {
+  if (DEMO_MODE) { showAuth(); return; }
+
+  const empresaId = document.getElementById('conc-empresa')?.value;
+  const fileInput = document.getElementById('conc-file');
+  const file = fileInput?.files?.[0];
+  const btnEl    = document.getElementById('conc-btn');
+  const statusEl = document.getElementById('conc-status');
+
+  if (!empresaId) { alert('Selecione a empresa.'); return; }
+  if (!file)      { alert('Selecione o arquivo do extrato bancário.'); return; }
+
+  // UI: loading
+  btnEl.disabled = true;
+  btnEl.textContent = '⏳ Processando...';
+  statusEl.className = 'mt-3 text-sm bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 text-blue-700';
+  statusEl.innerHTML = '🤖 Importando extrato e rodando motor de conciliação...';
+  statusEl.classList.remove('hidden');
+  document.getElementById('conc-resultado').classList.add('hidden');
+
+  const fd = new FormData();
+  fd.append('empresa_id', empresaId);
+  fd.append('extrato',    file);
+
+  try {
+    const resp = await fetch(`${API_URL}/api/v1/conciliacoes/extrato/processar`, {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${TOKEN}` },
+      body: fd,
+    });
+    const data = await resp.json();
+
+    if (!resp.ok) {
+      const msg = data.detail?.mensagem || data.detail || 'Erro ao processar extrato.';
+      const erros = data.detail?.erros?.join(', ') || '';
+      statusEl.className = 'mt-3 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-red-700';
+      statusEl.innerHTML = `❌ ${msg}${erros ? '<br><span class="text-xs">'+erros+'</span>' : ''}`;
+      btnEl.disabled = false;
+      btnEl.textContent = '🤖 Executar Conciliação com IA';
+      return;
+    }
+
+    statusEl.className = 'mt-3 text-sm bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-green-700';
+    statusEl.innerHTML = `✅ Extrato processado — ${data.total_movimentos} movimentos lidos de ${data.banco}`;
+
+    exibirResultadoConciliacao(data);
+
+  } catch (err) {
+    statusEl.className = 'mt-3 text-sm bg-red-50 border border-red-200 rounded-lg px-3 py-2.5 text-red-700';
+    statusEl.innerHTML = '❌ Falha na conexão. Verifique se o servidor está ativo.';
+  }
+
+  btnEl.disabled = false;
+  btnEl.textContent = '🤖 Executar Conciliação com IA';
+}
+
+function exibirResultadoConciliacao(data) {
+  const temConciliacao = data.conciliacao !== null && data.conciliacao !== undefined;
+  const score = temConciliacao ? data.conciliacao.score_geral : null;
+
+  // ── KPIs ──
+  const kpiEl = document.getElementById('conc-kpis');
+  if (kpiEl) {
+    if (temConciliacao) {
+      const c = data.conciliacao;
+      const auto = c.conciliados_auto || 0;
+      const manual = c.revisao_manual || 0;
+      const diverg = c.nao_conciliados_extrato || 0;
+      kpiEl.innerHTML =
+        kpi('✅', auto,             'Conciliados Auto', 'green') +
+        kpi('🔍', manual,           'Revisão Manual',   'yellow') +
+        kpi('⚠️', diverg,           'Não Conciliados',  'red') +
+        kpi('💰', fmt(data.saldo_periodo), 'Saldo Período', data.saldo_periodo>=0?'blue':'red');
+    } else {
+      kpiEl.innerHTML =
+        kpi('📥', data.total_movimentos, 'Movimentos',   'blue') +
+        kpi('💚', fmt(data.total_credito),  'Créditos',    'green') +
+        kpi('🔴', fmt(data.total_debito),   'Débitos',     'red') +
+        kpi('💰', fmt(data.saldo_periodo),  'Saldo',       data.saldo_periodo>=0?'blue':'red');
+    }
+  }
+
+  // ── Score bar ──
+  const scoreBar = document.getElementById('conc-score-bar');
+  const scoreTxt = document.getElementById('conc-score-txt');
+  const bancoInfo = document.getElementById('conc-banco-info');
+
+  if (bancoInfo) {
+    const b = [data.banco, data.agencia ? 'Ag. '+data.agencia : '', data.conta ? 'Cc. '+data.conta : ''].filter(Boolean).join(' · ');
+    bancoInfo.textContent = b;
+  }
+
+  if (temConciliacao && scoreBar && scoreTxt) {
+    const s = Math.round(score);
+    const cor = s >= 90 ? '#22c55e' : s >= 70 ? '#f59e0b' : '#ef4444';
+    setTimeout(() => {
+      scoreBar.style.width  = s + '%';
+      scoreBar.style.background = cor;
+      scoreBar.textContent  = s + '%';
+    }, 200);
+    scoreTxt.textContent = s + '%';
+    scoreTxt.className = 'text-2xl font-bold ' + (s>=90?'text-green-600':s>=70?'text-yellow-600':'text-red-600');
+    document.getElementById('conc-score-card').classList.remove('hidden');
+  } else if (!temConciliacao && scoreBar) {
+    // Sem lançamentos — oculta a barra de score ou mostra aviso
+    document.getElementById('conc-score-card').innerHTML = `
+      <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-700">
+        ℹ️ <strong>Extrato importado com sucesso!</strong> O score de conciliação estará disponível quando
+        os lançamentos contábeis da empresa estiverem cadastrados no sistema.<br>
+        <span class="text-xs text-blue-500 mt-1 block">
+          Dica: importe um balancete para gerar os lançamentos contábeis e então rode a conciliação.
+        </span>
+      </div>`;
+  }
+
+  // ── Alertas IA ──
+  const alertas = data.conciliacao?.alertas || [];
+  const alertasCard = document.getElementById('conc-alertas-card');
+  if (alertas.length > 0 && alertasCard) {
+    const alertasEl = document.getElementById('conc-alertas');
+    alertasEl.innerHTML = alertas.slice(0, 10).map(a => {
+      const nivel = a.toLowerCase().includes('alta') || a.toLowerCase().includes('erro') ? 'alto'
+                  : a.toLowerCase().includes('média') || a.toLowerCase().includes('divergên') ? 'medio'
+                  : 'baixo';
+      return alertaIA(nivel, 'Conciliação', '', a);
+    }).join('');
+    alertasCard.classList.remove('hidden');
+  }
+
+  // ── Tabela principal ──
+  const tbodyEl = document.getElementById('conc-table-body');
+  const headerEl = document.getElementById('conc-table-header');
+  const tituloEl = document.getElementById('conc-pares-titulo');
+  const countEl  = document.getElementById('conc-pares-count');
+
+  if (temConciliacao && data.conciliacao.pares?.length > 0) {
+    tituloEl.textContent = '🔗 Pares Conciliados';
+    countEl.textContent = data.conciliacao.pares.length + ' pares';
+    headerEl.innerHTML = `
+      <th class="text-left px-3 py-2">Data Contábil</th>
+      <th class="text-left px-2 py-2 hide-mobile">Descrição Contábil</th>
+      <th class="text-left px-2 py-2">Data Extrato</th>
+      <th class="text-left px-2 py-2">Descrição Extrato</th>
+      <th class="text-right px-2 py-2">Valor</th>
+      <th class="text-center px-2 py-2">Score</th>
+      <th class="text-center px-2 py-2 hide-mobile">Tipo</th>`;
+    tbodyEl.innerHTML = data.conciliacao.pares.map(p => {
+      const sc = p.score;
+      const scoreCor = sc >= 90 ? 'bg-green-100 text-green-700' : sc >= 70 ? 'bg-yellow-100 text-yellow-700' : 'bg-red-100 text-red-700';
+      const rowBg = p.manual ? 'bg-yellow-50' : '';
+      return `<tr class="border-b hover:bg-gray-50 ${rowBg}">
+        <td class="px-3 py-2 font-mono text-gray-600">${fmtDate(p.contabil.data)}</td>
+        <td class="px-2 py-2 text-gray-700 truncate max-w-[140px] hide-mobile">${p.contabil.descricao||'—'}</td>
+        <td class="px-2 py-2 font-mono text-gray-600">${fmtDate(p.extrato.data)}</td>
+        <td class="px-2 py-2 text-gray-700 truncate max-w-[140px]">${p.extrato.descricao||'—'}</td>
+        <td class="px-2 py-2 text-right font-medium text-gray-800">${fmt(p.contabil.valor)}</td>
+        <td class="px-2 py-2 text-center"><span class="px-1.5 py-0.5 rounded text-xs font-bold ${scoreCor}">${sc}%</span></td>
+        <td class="px-2 py-2 text-center hide-mobile"><span class="text-xs ${p.manual?'text-yellow-600':'text-green-600'}">${p.manual?'⚠️ Manual':'✅ Auto'}</span></td>
+      </tr>`;
+    }).join('');
+
+    // Itens não conciliados do extrato
+    const ncExtrato = data.conciliacao.nao_conciliados_extrato || 0;
+    if (ncExtrato > 0) {
+      const divCard = document.getElementById('conc-diverg-card');
+      const divBody = document.getElementById('conc-diverg-body');
+      const movNaoConc = (data.movimentos || []).slice(-ncExtrato);
+      divBody.innerHTML = movNaoConc.map(m => `
+        <div class="flex items-center justify-between px-4 py-3 bg-red-50">
+          <div>
+            <div class="text-sm font-medium text-red-800">${m.descricao||'—'}</div>
+            <div class="text-xs text-red-500">${fmtDate(m.data)} · ${m.documento||'Sem doc.'}</div>
+          </div>
+          <div class="text-right">
+            <div class="font-bold ${m.tipo==='C'?'text-green-700':'text-red-700'}">${m.tipo==='C'?'+':'−'} ${fmt(m.valor)}</div>
+            <div class="text-xs text-red-400">Não conciliado</div>
+          </div>
+        </div>`).join('');
+      if (divCard) divCard.classList.remove('hidden');
+    }
+  } else {
+    // Sem lançamentos — mostra apenas movimentos do extrato
+    tituloEl.textContent = '📋 Movimentos do Extrato';
+    countEl.textContent = (data.movimentos?.length || 0) + ' movimentos';
+    headerEl.innerHTML = `
+      <th class="text-left px-3 py-2">Data</th>
+      <th class="text-left px-2 py-2">Descrição</th>
+      <th class="text-right px-2 py-2">Valor</th>
+      <th class="text-center px-2 py-2">Tipo</th>
+      <th class="text-center px-2 py-2 hide-mobile">Documento</th>`;
+    tbodyEl.innerHTML = (data.movimentos || []).map(m => `
+      <tr class="border-b hover:bg-gray-50">
+        <td class="px-3 py-2 font-mono text-gray-600">${fmtDate(m.data)}</td>
+        <td class="px-2 py-2 text-gray-700">${m.descricao||'—'}</td>
+        <td class="px-2 py-2 text-right font-medium ${m.tipo==='C'?'text-green-700':'text-red-700'}">${m.tipo==='C'?'+':'−'} ${fmt(m.valor)}</td>
+        <td class="px-2 py-2 text-center">
+          <span class="text-xs px-1.5 py-0.5 rounded-full ${m.tipo==='C'?'bg-green-100 text-green-700':'bg-red-100 text-red-700'}">${m.tipo==='C'?'Crédito':'Débito'}</span>
+        </td>
+        <td class="px-2 py-2 text-center text-gray-400 hide-mobile">${m.documento||'—'}</td>
+      </tr>`).join('');
+  }
+
+  document.getElementById('conc-resultado').classList.remove('hidden');
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const p = String(d).split('-');
+  if (p.length === 3) return `${p[2]}/${p[1]}/${p[0]}`;
+  return d;
+}
+
+// ─────────────────────────────────────────────
 // CONSTANTES
 // ─────────────────────────────────────────────
 const REGIME_LABEL = {
@@ -1102,13 +1336,109 @@ balancete: () => `<div class="space-y-4">
 </div>`,
 
 conciliacao: () => `<div class="space-y-4">
-  <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
-    ${kpi('🔍','5','Total','blue')}${kpi('✅','2','Aprovadas','green')}
-    ${kpi('⚠️','2','Divergências','red')}${kpi('⏳','1','Pendentes','yellow')}
+
+  <!-- Upload de Extrato -->
+  <div class="card p-4">
+    <h2 class="font-semibold text-gray-700 mb-3">🏦 Conciliação Bancária Real</h2>
+    ${DEMO_MODE ? '<div class="mb-3 text-xs bg-amber-50 border border-amber-200 rounded-lg p-2 text-amber-700">👀 Modo demo — <button onclick="showAuth()" class="underline font-medium">faça login</button> para usar a conciliação real com IA</div>' : ''}
+    <div class="grid grid-cols-1 md:grid-cols-2 gap-3 mb-4">
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Empresa</label>
+        <select id="conc-empresa" class="w-full border rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:outline-none bg-gray-50">
+          <option value="">Selecione a empresa...</option>
+          ${EMPRESAS_REAIS.map(e=>`<option value="${e.id||''}">${e.razao_social||e.nome}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label class="block text-xs font-medium text-gray-600 mb-1">Extrato Bancário</label>
+        <div class="flex gap-2">
+          <input type="file" id="conc-file" class="hidden" accept=".ofx,.csv,.pdf">
+          <button onclick="document.getElementById('conc-file').click()"
+            class="flex-1 border-2 border-dashed border-gray-300 rounded-lg px-3 py-2 text-sm text-gray-500 hover:border-blue-400 hover:text-blue-600 transition-colors text-left" id="conc-file-label">
+            📂 Selecionar arquivo (OFX / CSV / PDF)
+          </button>
+        </div>
+      </div>
+    </div>
+    <button onclick="processarExtrato()"
+      class="w-full md:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 text-white px-6 py-2.5 rounded-lg font-medium text-sm hover:from-blue-700 hover:to-indigo-700 transition-all disabled:opacity-50"
+      id="conc-btn">
+      🤖 Executar Conciliação com IA
+    </button>
+    <div id="conc-status" class="hidden mt-3"></div>
   </div>
+
+  <!-- Resultados (ocultos inicialmente) -->
+  <div id="conc-resultado" class="hidden space-y-4">
+
+    <!-- KPIs -->
+    <div class="grid grid-cols-2 md:grid-cols-4 gap-3" id="conc-kpis"></div>
+
+    <!-- Score bar -->
+    <div class="card p-4" id="conc-score-card">
+      <div class="flex items-center justify-between mb-3">
+        <div>
+          <h3 class="font-semibold text-gray-700 text-sm">Score de Conciliação</h3>
+          <p class="text-xs text-gray-400" id="conc-banco-info"></p>
+        </div>
+        <span class="text-2xl font-bold" id="conc-score-txt">—</span>
+      </div>
+      <div class="w-full bg-gray-200 rounded-full h-5">
+        <div class="h-5 rounded-full flex items-center justify-end pr-3 transition-all duration-1000 text-white text-xs font-bold"
+          id="conc-score-bar" style="width:0%"></div>
+      </div>
+      <div class="flex gap-4 mt-2 text-xs text-gray-500">
+        <span>🟢 Automático ≥ 70%</span>
+        <span>🟡 Revisão manual 50–69%</span>
+        <span>🔴 Não conciliado &lt; 50%</span>
+      </div>
+    </div>
+
+    <!-- Alertas IA -->
+    <div id="conc-alertas-card" class="hidden card p-4 border-l-4 border-amber-400">
+      <h3 class="font-semibold text-amber-700 mb-3 text-sm">🤖 Alertas da Inteligência Artificial</h3>
+      <div id="conc-alertas" class="space-y-2"></div>
+    </div>
+
+    <!-- Pares Conciliados (quando há lançamentos) -->
+    <div id="conc-pares-card" class="card overflow-hidden">
+      <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
+        <h3 class="font-semibold text-gray-700 text-sm" id="conc-pares-titulo">Movimentos do Extrato</h3>
+        <span class="text-xs text-gray-500" id="conc-pares-count"></span>
+      </div>
+      <div class="table-scroll">
+      <table class="w-full text-xs min-w-[600px]">
+        <thead class="bg-gray-50 border-b text-gray-500 uppercase">
+          <tr id="conc-table-header">
+            <th class="text-left px-3 py-2">Data</th>
+            <th class="text-left px-2 py-2">Descrição</th>
+            <th class="text-right px-2 py-2">Valor</th>
+            <th class="text-center px-2 py-2">Tipo</th>
+            <th class="text-center px-2 py-2 hide-mobile">Documento</th>
+          </tr>
+        </thead>
+        <tbody id="conc-table-body">
+          <tr><td colspan="5" class="text-center py-6 text-gray-400">Carregando...</td></tr>
+        </tbody>
+      </table>
+      </div>
+    </div>
+
+    <!-- Divergências -->
+    <div id="conc-diverg-card" class="hidden card overflow-hidden">
+      <div class="px-4 py-3 bg-red-50 border-b border-red-200">
+        <h3 class="font-semibold text-red-700 text-sm">⚠️ Itens sem correspondência</h3>
+      </div>
+      <div id="conc-diverg-body" class="divide-y"></div>
+    </div>
+
+  </div>
+
+  <!-- Demo fallback -->
+  ${DEMO_MODE ? `
   <div class="card overflow-hidden">
     <div class="px-4 py-3 bg-gray-50 border-b">
-      <h3 class="font-semibold text-gray-700 text-sm">Conciliações — Jun/2025</h3>
+      <h3 class="font-semibold text-gray-700 text-sm">Conciliações Demo — Jun/2025</h3>
     </div>
     <div class="table-scroll">
     <table class="w-full text-sm min-w-[500px]">
@@ -1136,7 +1466,8 @@ conciliacao: () => `<div class="space-y-4">
       </tbody>
     </table>
     </div>
-  </div>
+  </div>` : ''}
+
 </div>`,
 
 auditoria: () => `<div class="space-y-4">

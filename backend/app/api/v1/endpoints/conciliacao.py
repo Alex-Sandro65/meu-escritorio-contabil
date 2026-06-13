@@ -23,6 +23,138 @@ from app.services.conciliacao.motor_conciliacao import (
 router = APIRouter(prefix="/conciliacoes", tags=["conciliacao"])
 
 
+@router.post("/extrato/processar")
+async def processar_extrato(
+    empresa_id: UUID = Form(...),
+    extrato: UploadFile = File(...),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Importa extrato bancário (OFX/CSV/PDF) e tenta conciliar com lançamentos
+    contábeis da empresa. Se não houver lançamentos, retorna os movimentos
+    do extrato para visualização.
+    """
+    conteudo = await extrato.read()
+    nome = (extrato.filename or "").lower()
+
+    if nome.endswith(".ofx"):
+        res_extrato = importar_extrato_ofx(conteudo)
+    elif nome.endswith(".csv"):
+        res_extrato = importar_extrato_csv(conteudo)
+    elif nome.endswith(".pdf"):
+        res_extrato = importar_extrato_pdf(conteudo)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato não suportado. Use OFX, CSV ou PDF."
+        )
+
+    if not res_extrato.sucesso or not res_extrato.movimentos:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "mensagem": "Não foi possível processar o arquivo.",
+                "erros": res_extrato.erros,
+            }
+        )
+
+    movimentos = res_extrato.movimentos
+
+    total_credito = sum(float(m.valor) for m in movimentos if m.tipo == "C")
+    total_debito  = sum(float(m.valor) for m in movimentos if m.tipo == "D")
+
+    # Busca lançamentos contábeis não conciliados da empresa
+    result = await db.execute(
+        select(Lancamento).where(
+            Lancamento.empresa_id == empresa_id,
+            Lancamento.conciliado == False,
+        ).limit(500)
+    )
+    lancamentos_db = result.scalars().all()
+
+    itens_externos = [
+        ItemConciliavel(
+            id=f"ext_{i}",
+            data=m.data,
+            valor=m.valor,
+            tipo=m.tipo,
+            descricao=m.descricao,
+            documento=m.documento,
+            origem="extrato",
+        )
+        for i, m in enumerate(movimentos)
+    ]
+
+    conciliacao_result = None
+
+    if lancamentos_db:
+        itens_contabeis = [
+            ItemConciliavel(
+                id=str(l.id),
+                data=l.data_lancamento,
+                valor=abs(l.valor),
+                tipo=l.tipo.value if hasattr(l.tipo, "value") else l.tipo,
+                descricao=l.historico or "",
+                documento=l.documento,
+                origem="contabil",
+            )
+            for l in lancamentos_db
+        ]
+        resultado = conciliar_bancario(itens_contabeis, itens_externos)
+        conciliacao_result = {
+            "score_geral": float(resultado.score_geral),
+            "total_pares": len(resultado.pares),
+            "conciliados_auto": sum(1 for p in resultado.pares if not p.manual),
+            "revisao_manual": sum(1 for p in resultado.pares if p.manual),
+            "nao_conciliados_contabil": len(resultado.nao_conciliados_contabil),
+            "nao_conciliados_extrato": len(resultado.nao_conciliados_externos),
+            "alertas": resultado.alertas[:20],
+            "pares": [
+                {
+                    "contabil": {
+                        "data": str(p.item_contabil.data),
+                        "valor": float(p.item_contabil.valor),
+                        "descricao": p.item_contabil.descricao,
+                        "documento": p.item_contabil.documento or "",
+                    },
+                    "extrato": {
+                        "data": str(p.item_externo.data),
+                        "valor": float(p.item_externo.valor),
+                        "descricao": p.item_externo.descricao,
+                    },
+                    "score": float(p.score),
+                    "motivo": p.motivo,
+                    "manual": p.manual,
+                }
+                for p in resultado.pares[:100]
+            ],
+        }
+
+    return {
+        "banco": res_extrato.banco or "Banco não identificado",
+        "agencia": res_extrato.agencia or "",
+        "conta": res_extrato.conta or "",
+        "total_movimentos": len(movimentos),
+        "total_credito": round(total_credito, 2),
+        "total_debito": round(total_debito, 2),
+        "saldo_periodo": round(total_credito - total_debito, 2),
+        "tem_lancamentos": len(lancamentos_db) > 0,
+        "total_lancamentos": len(lancamentos_db),
+        "movimentos": [
+            {
+                "data": str(m.data),
+                "tipo": m.tipo,
+                "valor": float(m.valor),
+                "descricao": m.descricao,
+                "documento": m.documento or "",
+            }
+            for m in movimentos[:300]
+        ],
+        "conciliacao": conciliacao_result,
+    }
+
+
 @router.post("/bancaria")
 async def iniciar_conciliacao_bancaria(
     balancete_id: UUID = Form(...),
