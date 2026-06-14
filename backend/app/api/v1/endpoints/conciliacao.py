@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, delete
 from uuid import UUID
 from decimal import Decimal
 from pydantic import BaseModel
@@ -10,10 +10,13 @@ from app.api.v1.endpoints.auth import get_current_user
 from app.models.user import User
 from app.models.conciliacao import Conciliacao, ConciliacaoItem, TipoConciliacao, StatusConciliacao
 from app.models.balancete import Balancete, BalanceteItem
-from app.models.lancamento import Lancamento, TipoLancamento
+from app.models.lancamento import Lancamento, TipoLancamento, OrigemLancamento
 from app.models.extrato import ExtratoItem
 from app.services.importacao.leitor_extrato import (
     importar_extrato_ofx, importar_extrato_csv, importar_extrato_pdf
+)
+from app.services.importacao.leitor_razao import (
+    importar_razao_excel, importar_razao_csv, importar_razao_sped
 )
 from app.services.conciliacao.motor_conciliacao import (
     ItemConciliavel, conciliar_bancario, conciliar_clientes,
@@ -21,6 +24,264 @@ from app.services.conciliacao.motor_conciliacao import (
 )
 
 router = APIRouter(prefix="/conciliacoes", tags=["conciliacao"])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# HELPER: parsear extrato por extensão
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _parse_extrato(conteudo: bytes, nome: str):
+    nome = (nome or "").lower()
+    if nome.endswith(".ofx"):
+        return importar_extrato_ofx(conteudo)
+    elif nome.endswith(".csv"):
+        return importar_extrato_csv(conteudo)
+    elif nome.endswith(".pdf"):
+        return importar_extrato_pdf(conteudo)
+    else:
+        return None
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# ENDPOINT: Conciliação Automática Completa com IA
+# Fluxo: Razão Contábil + Extrato → IA cruza → resultado
+# ─────────────────────────────────────────────────────────────────────────────
+
+@router.post("/automatica")
+async def conciliar_automaticamente(
+    empresa_id: UUID = Form(...),
+    competencia: str = Form(...),            # YYYY-MM
+    razao: UploadFile = File(...),           # Excel/CSV/SPED com lançamentos individuais
+    extrato: UploadFile = File(...),         # OFX/CSV/PDF extrato bancário
+    substituir_lancamentos: bool = Form(True),  # True = apaga lancamentos anteriores do período
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """
+    Fluxo completo de conciliação bancária automática com IA:
+
+    1. Lê o arquivo de Razão Contábil (Excel/CSV/SPED) → cria Lancamentos
+    2. Lê o Extrato Bancário (OFX/CSV/PDF) → obtém movimentos
+    3. Motor de Conciliação cruza os dois
+    4. Retorna resultado completo: score, pares, divergências, alertas
+    """
+
+    # ── PASSO 1: Importar Razão Contábil ──────────────────────────────────
+    razao_conteudo = await razao.read()
+    razao_nome = (razao.filename or "").lower()
+
+    if razao_nome.endswith((".xlsx", ".xls")):
+        res_razao = importar_razao_excel(razao_conteudo, razao_nome)
+    elif razao_nome.endswith(".csv"):
+        res_razao = importar_razao_csv(razao_conteudo)
+    elif razao_nome.endswith((".txt", ".sped")):
+        res_razao = importar_razao_sped(razao_conteudo)
+    else:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato do Razão não suportado. Use Excel (.xlsx), CSV ou SPED ECD (.txt/.sped)."
+        )
+
+    if not res_razao.sucesso or not res_razao.lancamentos:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "etapa": "razao",
+                "mensagem": "Não foi possível processar o arquivo de Razão Contábil.",
+                "erros": res_razao.erros,
+                "dica": (
+                    "O arquivo deve ter colunas: Data, Conta, Débito, Crédito, Histórico (e opcionalmente Documento). "
+                    "Formatos suportados: Excel, CSV, SPED ECD."
+                ),
+            }
+        )
+
+    # ── PASSO 2: Importar Extrato Bancário ────────────────────────────────
+    extrato_conteudo = await extrato.read()
+    res_extrato = _parse_extrato(extrato_conteudo, extrato.filename or "")
+
+    if res_extrato is None:
+        raise HTTPException(
+            status_code=400,
+            detail="Formato do Extrato não suportado. Use OFX, CSV ou PDF."
+        )
+    if not res_extrato.sucesso or not res_extrato.movimentos:
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "etapa": "extrato",
+                "mensagem": "Não foi possível processar o extrato bancário.",
+                "erros": res_extrato.erros,
+            }
+        )
+
+    # ── PASSO 3: Persistir Lançamentos ───────────────────────────────────
+    if substituir_lancamentos:
+        # Remove lançamentos do período para evitar duplicatas
+        # Determina intervalo da competência
+        ano, mes = competencia.split("-")
+        from datetime import date
+        import calendar
+        data_ini = date(int(ano), int(mes), 1)
+        ultimo_dia = calendar.monthrange(int(ano), int(mes))[1]
+        data_fim = date(int(ano), int(mes), ultimo_dia)
+
+        await db.execute(
+            delete(Lancamento).where(
+                Lancamento.empresa_id == empresa_id,
+                Lancamento.data_lancamento >= data_ini,
+                Lancamento.data_lancamento <= data_fim,
+                Lancamento.origem == OrigemLancamento.IMPORTACAO,
+            )
+        )
+
+    novos_lancamentos = []
+    for lanc in res_razao.lancamentos:
+        obj = Lancamento(
+            empresa_id=empresa_id,
+            data_lancamento=lanc.data,
+            tipo=TipoLancamento.DEBITO if lanc.tipo == "D" else TipoLancamento.CREDITO,
+            valor=lanc.valor,
+            historico=lanc.historico,
+            documento=lanc.documento,
+            origem=OrigemLancamento.IMPORTACAO,
+            conciliado=False,
+        )
+        db.add(obj)
+        novos_lancamentos.append(obj)
+
+    await db.flush()  # obtém IDs
+
+    # ── PASSO 4: Motor de Conciliação ────────────────────────────────────
+    itens_contabeis = [
+        ItemConciliavel(
+            id=str(l.id),
+            data=l.data_lancamento,
+            valor=abs(l.valor),
+            tipo=l.tipo.value if hasattr(l.tipo, "value") else l.tipo,
+            descricao=l.historico or "",
+            documento=l.documento,
+            origem="contabil",
+        )
+        for l in novos_lancamentos
+    ]
+
+    movimentos = res_extrato.movimentos
+    itens_externos = [
+        ItemConciliavel(
+            id=f"ext_{i}",
+            data=m.data,
+            valor=m.valor,
+            tipo=m.tipo,
+            descricao=m.descricao,
+            documento=m.documento,
+            origem="extrato",
+        )
+        for i, m in enumerate(movimentos)
+    ]
+
+    resultado = conciliar_bancario(itens_contabeis, itens_externos)
+
+    # ── PASSO 5: Salvar Conciliação no banco ────────────────────────────
+    total_contabil = sum(float(l.valor) for l in novos_lancamentos)
+    total_extrato  = sum(float(m.valor) for m in movimentos)
+
+    conciliacao = Conciliacao(
+        empresa_id=empresa_id,
+        tipo=TipoConciliacao.BANCARIA,
+        competencia=competencia,
+        status=(
+            StatusConciliacao.CONCLUIDA
+            if resultado.score_geral >= 95
+            else StatusConciliacao.COM_DIVERGENCIA
+        ),
+        saldo_contabil=Decimal(str(round(total_contabil, 2))),
+        saldo_externo=Decimal(str(round(total_extrato, 2))),
+        diferenca=Decimal(str(round(abs(total_contabil - total_extrato), 2))),
+        score=resultado.score_geral,
+        total_itens=len(resultado.pares),
+        itens_conciliados=sum(1 for p in resultado.pares if not p.manual),
+        itens_pendentes=len(resultado.nao_conciliados_contabil),
+        itens_divergentes=sum(1 for p in resultado.pares if p.manual),
+        alertas_ia=resultado.alertas,
+        responsavel_id=current_user.id,
+    )
+    db.add(conciliacao)
+    await db.commit()
+
+    # ── PASSO 6: Montar Resposta ─────────────────────────────────────────
+    total_cred_ext = sum(float(m.valor) for m in movimentos if m.tipo == "C")
+    total_deb_ext  = sum(float(m.valor) for m in movimentos if m.tipo == "D")
+
+    return {
+        "conciliacao_id": str(conciliacao.id),
+        "competencia": competencia,
+        "resumo": {
+            "lancamentos_importados": len(novos_lancamentos),
+            "movimentos_extrato": len(movimentos),
+            "banco": res_extrato.banco or "Banco não identificado",
+            "agencia": res_extrato.agencia or "",
+            "conta": res_extrato.conta or "",
+        },
+        "score_geral": float(resultado.score_geral),
+        "status": conciliacao.status,
+        "saldo_contabil": round(total_contabil, 2),
+        "saldo_extrato": round(total_extrato, 2),
+        "diferenca": round(abs(total_contabil - total_extrato), 2),
+        "extrato": {
+            "total_credito": round(total_cred_ext, 2),
+            "total_debito": round(total_deb_ext, 2),
+            "saldo_periodo": round(total_cred_ext - total_deb_ext, 2),
+        },
+        "conciliacao": {
+            "conciliados_auto": sum(1 for p in resultado.pares if not p.manual),
+            "revisao_manual": sum(1 for p in resultado.pares if p.manual),
+            "nao_conciliados_contabil": len(resultado.nao_conciliados_contabil),
+            "nao_conciliados_extrato": len(resultado.nao_conciliados_externos),
+            "alertas": resultado.alertas[:20],
+            "pares": [
+                {
+                    "contabil": {
+                        "data": str(p.item_contabil.data),
+                        "valor": float(p.item_contabil.valor),
+                        "descricao": p.item_contabil.descricao,
+                        "documento": p.item_contabil.documento or "",
+                        "tipo": p.item_contabil.tipo,
+                    },
+                    "extrato": {
+                        "data": str(p.item_externo.data),
+                        "valor": float(p.item_externo.valor),
+                        "descricao": p.item_externo.descricao,
+                        "tipo": p.item_externo.tipo,
+                    },
+                    "score": float(p.score),
+                    "motivo": p.motivo,
+                    "manual": p.manual,
+                }
+                for p in resultado.pares[:200]
+            ],
+            "divergencias_contabil": [
+                {
+                    "data": str(i.data),
+                    "valor": float(i.valor),
+                    "descricao": i.descricao,
+                    "documento": i.documento or "",
+                    "tipo": i.tipo,
+                }
+                for i in resultado.nao_conciliados_contabil[:50]
+            ],
+            "divergencias_extrato": [
+                {
+                    "data": str(i.data),
+                    "valor": float(i.valor),
+                    "descricao": i.descricao,
+                    "tipo": i.tipo,
+                }
+                for i in resultado.nao_conciliados_externos[:50]
+            ],
+        },
+        "razao_avisos": res_razao.avisos,
+    }
 
 
 @router.post("/extrato/processar")
